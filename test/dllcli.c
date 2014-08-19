@@ -25,8 +25,11 @@ int main()
 {
 	dll_init("enp3s0");
 	char data[100];
-	int size = 100;
-	dll_rcv(data, size);
-	printf("data:%s\n", data);
+	int ret;
+	while(1) {
+		memset(data, 0, 100);
+		ret = dll_rcv(data, 99);
+		printf("ret:%d, data:%s\n", ret, data + 14);
+	}
 	return 0;
 }

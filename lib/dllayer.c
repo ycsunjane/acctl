@@ -33,7 +33,7 @@
 
 #include "log.h"
 
-#define ETH_INNO 		(ETH_P_ALL)
+#define ETH_INNO 		(0x8d8d)
 #define DLL_PKT_MAXLEN 		(512)
 #define DLL_PKT_DATALEN 	(DLL_PKT_MAXLEN - sizeof(struct ethhdr))
 
@@ -121,7 +121,7 @@ static void __init_pktbuf(char *localmac)
 int __create_sock(int brdcst)
 {
 	int sock;
-	sock = socket(PF_PACKET, SOCK_RAW, ETH_INNO);
+	sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_INNO));
 	if(sock < 0) {
 		sys_err("Create dllayer socket failed: %s\n", 
 			strerror(errno));
@@ -144,14 +144,44 @@ int __create_sock(int brdcst)
 void __build_brdll()
 {
 	struct sockaddr_ll *ll = &dllbrd.ll;
+	memset(ll, 0, sizeof(struct sockaddr_ll));
 
 	ll->sll_family   = PF_PACKET;
-	ll->sll_protocol = htons(ETH_INNO);
 	ll->sll_ifindex  = dllnic.ifiindex;
-	ll->sll_hatype   = ARPHRD_ETHER;
-	ll->sll_pkttype  = PACKET_BROADCAST;
 	ll->sll_halen 	 = ETH_ALEN;
 	memset(ll->sll_addr, 0xff, 6);
+	ll->sll_addr[6]  = 0x00;
+	ll->sll_addr[7]  = 0x00;
+}
+
+void __build_rcvll(int bind)
+{
+	dllrcv.recvlen = sizeof(struct sockaddr_ll);
+
+	struct sockaddr_ll *ll = &dllrcv.ll;
+	memset(ll, 0, sizeof(struct sockaddr_ll));
+	
+	if(bind) {
+		ll->sll_family   = PF_PACKET;
+		ll->sll_protocol = htons(ETH_INNO);
+		ll->sll_ifindex  = dllnic.ifiindex;
+	} else {
+		ll->sll_family   = PF_PACKET;
+		ll->sll_protocol = htons(ETH_INNO);
+		ll->sll_ifindex  = dllnic.ifiindex;
+		ll->sll_pkttype = PACKET_HOST;
+	}
+}
+
+void __build_sdrll(char *mac)
+{
+	struct sockaddr_ll *ll = &dllsdr.ll;
+	memset(ll, 0, sizeof(struct sockaddr_ll));
+
+	ll->sll_family   = PF_PACKET;
+	ll->sll_ifindex  = dllnic.ifiindex;
+	ll->sll_halen 	 = ETH_ALEN;
+	memcpy(ll->sll_addr, mac, ETH_ALEN);
 	ll->sll_addr[6]  = 0x00;
 	ll->sll_addr[7]  = 0x00;
 }
@@ -173,30 +203,16 @@ void __dll_buildpkt(char *dmac, char *data, int size)
 	memcpy(deth->data, data, size);
 }
 
-void __build_sdrsock(char *mac)
-{
-	struct sockaddr_ll *ll = &dllbrd.ll;
-
-	ll->sll_family   = PF_PACKET;
-	ll->sll_protocol = htons(ETH_INNO);
-	ll->sll_ifindex  = dllnic.ifiindex;
-	ll->sll_hatype   = ARPHRD_ETHER;
-	ll->sll_pkttype  = PACKET_OUTGOING;
-	ll->sll_halen 	 = ETH_ALEN;
-	memcpy(ll->sll_addr, mac, ETH_ALEN);
-	ll->sll_addr[6]  = 0x00;
-	ll->sll_addr[7]  = 0x00;
-}
-
 int dll_sendpkt(char *dmac, char *data, int size)
 {
 	assert(dmac != NULL && size <= DLL_PKT_DATALEN && 
 		data != NULL);
 	__dll_buildpkt(dmac, data, size);
-	__build_sdrsock(dmac);
+	__build_sdrll(dmac);
 
 	int ret;
-	ret = sendto(dllsdr.sdrsock, dllsdr.sdrpkt, size + ETH_ALEN, 0,
+	ret = sendto(dllsdr.sdrsock, dllsdr.sdrpkt, 
+		size + sizeof(struct ethhdr), 0,
 		(struct sockaddr *)&dllsdr.ll, sizeof(dllsdr.ll));
 	if(ret < 0) {
 		sys_warn("send packet failed: %s\n", 
@@ -214,7 +230,8 @@ int dll_brdcast(char *data, int size)
 	struct dlleth_t *deth = (void *)dllbrd.brdpkt;
 	memcpy(&deth->data, data, size);
 
-	ret = sendto(dllbrd.brdsock, dllbrd.brdpkt, size + ETH_ALEN, 0, 
+	ret = sendto(dllbrd.brdsock, dllbrd.brdpkt, 
+		size + sizeof(struct ethhdr), 0, 
 		(struct sockaddr *)&dllbrd.ll, sizeof(dllbrd.ll));
 	if(ret < 0) {
 		sys_warn("broad cast failed: %s\n", 
@@ -225,11 +242,35 @@ int dll_brdcast(char *data, int size)
 	return 0;
 }
 
+static void __init_sdr()
+{
+	dllsdr.sdrsock = __create_sock(0);
+}
+
+static void __init_rcv()
+{
+	int ret;
+
+	dllrcv.rcvsock = __create_sock(0);
+
+	__build_rcvll(1);
+	ret = bind(dllrcv.rcvsock, (struct sockaddr *)&dllrcv.ll, 
+		dllrcv.recvlen);
+	if(ret < 0) {
+		sys_err("Bind recive socket failed: %s\n", 
+			strerror(errno));
+		exit(-1);
+	}
+}
+
 int dll_rcv(char *data, int size)
 {
+	assert(size <= DLL_PKT_DATALEN && data != NULL);
+
 	dllrcv.recvlen = sizeof(struct sockaddr_ll);
 
 	int ret;
+	__build_rcvll(0);
 	ret = recvfrom(dllrcv.rcvsock, dllrcv.rcvpkt, 
 		DLL_PKT_MAXLEN, 0, 
 		(struct sockaddr *)&dllrcv.ll, &dllrcv.recvlen);
@@ -238,17 +279,19 @@ int dll_rcv(char *data, int size)
 		return -1;
 	}
 	memcpy(data, dllrcv.rcvpkt, size);
-	return 0;
+	return (ret > size) ? size: ret;
 }
 
 void dll_init(char *nic)
 {
 	assert(nic != NULL);
-	dllsdr.sdrsock = __create_sock(0);
-	dllrcv.rcvsock = __create_sock(1);
 
-	__init_nic(dllsdr.sdrsock, nic);
+	int sock = __create_sock(0);
+	__init_nic(sock, nic);
+	close(sock);
 	__init_pktbuf(&dllnic.mac[0]);
 	__init_brdcast();
+	__init_rcv();
+	__init_sdr();
 }
 

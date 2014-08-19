@@ -24,7 +24,7 @@ int debug = 1;
 int main()
 {
 	dll_init("enp3s0");
-	char *data = "wirelesser";
+	char *data = "wwirelesserwirelesserwirelesserwirelesserwirelesserwirelesserwirelesserwirelesserwirelesserwirelesserirelesser";
 	int size = strlen(data);
 
 	dll_brdcast(data, size);
