@@ -30,12 +30,18 @@
 #include <netpacket/packet.h>
 #include <net/ethernet.h>
 #include <net/if_arp.h>
+#include <pthread.h>
 
 #include "log.h"
 
 #define ETH_INNO 		(0x8d8d)
 #define DLL_PKT_MAXLEN 		(512)
 #define DLL_PKT_DATALEN 	(DLL_PKT_MAXLEN - sizeof(struct ethhdr))
+
+struct dlleth_t {
+	struct ethhdr 	hdr;
+	char 	data[0];
+}__attribute__((packed));
 
 struct dllnic_t {
 	char nic[IFNAMSIZ];
@@ -47,6 +53,7 @@ struct dllsdr_t {
 	int sdrsock;
 	char *sdrpkt;
 	struct sockaddr_ll ll;
+	pthread_mutex_t lock;
 } dllsdr;
 
 struct dllrcv_t {
@@ -54,18 +61,22 @@ struct dllrcv_t {
 	char *rcvpkt;
 	socklen_t recvlen;
 	struct sockaddr_ll ll;
+	pthread_mutex_t lock;
 } dllrcv;
 
 struct dllbrd_t {
 	int brdsock;
 	char *brdpkt;
 	struct sockaddr_ll ll;
+	pthread_mutex_t lock;
 } dllbrd;
 
-struct dlleth_t {
-	struct ethhdr 	hdr;
-	char 	data[0];
-}__attribute__((packed));
+#define LOCK_RCV() 	pthread_mutex_lock(&dllrcv.lock)
+#define LOCK_BRD() 	pthread_mutex_lock(&dllbrd.lock)
+#define LOCK_SDR() 	pthread_mutex_lock(&dllsdr.lock)
+#define UNLOCK_RCV() 	pthread_mutex_unlock(&dllrcv.lock)
+#define UNLOCK_BRD() 	pthread_mutex_unlock(&dllbrd.lock)
+#define UNLOCK_SDR() 	pthread_mutex_unlock(&dllsdr.lock)
 
 static void __init_nic(int sock, char *nic)
 {
@@ -188,6 +199,7 @@ void __build_sdrll(char *mac)
 
 void __init_brdcast()
 {
+	pthread_mutex_init(&dllbrd.lock, NULL);
 	dllbrd.brdsock = __create_sock(1);
 	__build_brdll();
 }
@@ -203,47 +215,9 @@ void __dll_buildpkt(char *dmac, char *data, int size)
 	memcpy(deth->data, data, size);
 }
 
-int dll_sendpkt(char *dmac, char *data, int size)
-{
-	assert(dmac != NULL && size <= DLL_PKT_DATALEN && 
-		data != NULL);
-	__dll_buildpkt(dmac, data, size);
-	__build_sdrll(dmac);
-
-	int ret;
-	ret = sendto(dllsdr.sdrsock, dllsdr.sdrpkt, 
-		size + sizeof(struct ethhdr), 0,
-		(struct sockaddr *)&dllsdr.ll, sizeof(dllsdr.ll));
-	if(ret < 0) {
-		sys_warn("send packet failed: %s\n", 
-			strerror(errno));
-		return -1;
-	}
-	return 0;
-}
-
-int dll_brdcast(char *data, int size)
-{
-	assert(size <= DLL_PKT_DATALEN && data != NULL);
-
-	int ret;
-	struct dlleth_t *deth = (void *)dllbrd.brdpkt;
-	memcpy(&deth->data, data, size);
-
-	ret = sendto(dllbrd.brdsock, dllbrd.brdpkt, 
-		size + sizeof(struct ethhdr), 0, 
-		(struct sockaddr *)&dllbrd.ll, sizeof(dllbrd.ll));
-	if(ret < 0) {
-		sys_warn("broad cast failed: %s\n", 
-			strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
 static void __init_sdr()
 {
+	pthread_mutex_init(&dllsdr.lock, NULL);
 	dllsdr.sdrsock = __create_sock(0);
 }
 
@@ -251,6 +225,7 @@ static void __init_rcv()
 {
 	int ret;
 
+	pthread_mutex_init(&dllrcv.lock, NULL);
 	dllrcv.rcvsock = __create_sock(0);
 
 	__build_rcvll(1);
@@ -263,6 +238,53 @@ static void __init_rcv()
 	}
 }
 
+int dll_sendpkt(char *dmac, char *data, int size)
+{
+	assert(dmac != NULL && size <= DLL_PKT_DATALEN && 
+		data != NULL);
+	int ret;
+
+	LOCK_SDR();
+	__dll_buildpkt(dmac, data, size);
+	__build_sdrll(dmac);
+
+	ret = sendto(dllsdr.sdrsock, dllsdr.sdrpkt, 
+		size + sizeof(struct ethhdr), 0,
+		(struct sockaddr *)&dllsdr.ll, sizeof(dllsdr.ll));
+	if(ret < 0) {
+		sys_warn("send packet failed: %s\n", 
+			strerror(errno));
+		UNLOCK_SDR();
+		return -1;
+	}
+	UNLOCK_SDR();
+	return 0;
+}
+
+int dll_brdcast(char *data, int size)
+{
+	assert(size <= DLL_PKT_DATALEN && data != NULL);
+
+	int ret;
+	struct dlleth_t *deth = (void *)dllbrd.brdpkt;
+
+	LOCK_BRD();
+	memcpy(&deth->data, data, size);
+
+	ret = sendto(dllbrd.brdsock, dllbrd.brdpkt, 
+		size + sizeof(struct ethhdr), 0, 
+		(struct sockaddr *)&dllbrd.ll, sizeof(dllbrd.ll));
+	if(ret < 0) {
+		sys_warn("broad cast failed: %s\n", 
+			strerror(errno));
+		UNLOCK_BRD();
+		return -1;
+	}
+
+	UNLOCK_BRD();
+	return 0;
+}
+
 int dll_rcv(char *data, int size)
 {
 	assert(size <= DLL_PKT_DATALEN && data != NULL);
@@ -270,15 +292,18 @@ int dll_rcv(char *data, int size)
 	dllrcv.recvlen = sizeof(struct sockaddr_ll);
 
 	int ret;
+	LOCK_RCV();
 	__build_rcvll(0);
 	ret = recvfrom(dllrcv.rcvsock, dllrcv.rcvpkt, 
 		DLL_PKT_MAXLEN, 0, 
 		(struct sockaddr *)&dllrcv.ll, &dllrcv.recvlen);
 	if(ret < 0) {
 		sys_warn("recv pkt failed: %s\n", strerror(errno));
+		UNLOCK_RCV();
 		return -1;
 	}
 	memcpy(data, dllrcv.rcvpkt, size);
+	UNLOCK_RCV();
 	return (ret > size) ? size: ret;
 }
 
