@@ -17,15 +17,29 @@
  */
 #ifndef __ARG_H__
 #define __ARG_H__
+#include <netinet/in.h>
+#include <linux/if_ether.h>
 #include <net/if.h>
+#include <getopt.h>
 
 struct arg_t {
-	char nic[IFNAMSIZ];
+#ifdef SERVER
+	int  	brditv;
+	int 	port;
+	struct sockaddr_in addr;
+#endif
+	int 	msgitv;
+	/* avoid gcc warning */
+	char 	nic[IFNAMSIZ];
+	char 	mac[ETH_ALEN];
 };
 
 extern struct arg_t argument;
 extern int debug;
 extern int daemon_mode;
 
+void help();
+void proc_cfgarg();
+void proc_cmdarg(int argc, char *argv[]);
 void proc_arg(int argc, char *argv[]);
 #endif /* __ARG_H__ */

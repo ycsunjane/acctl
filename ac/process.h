@@ -1,12 +1,12 @@
 /*
  * =====================================================================================
  *
- *       Filename:  net.h
+ *       Filename:  process.h
  *
  *    Description:  
  *
  *        Version:  1.0
- *        Created:  2014年08月20日 14时25分43秒
+ *        Created:  2014年08月25日 18时28分04秒
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -15,8 +15,10 @@
  *
  * =====================================================================================
  */
-#ifndef __NET_H__
-#define __NET_H__
+#ifndef __PROCESS_H__
+#define __PROCESS_H__
 
-void net_init();
-#endif /*__NET_H__*/
+extern char 	acuuid[UUID_LEN];
+void msg_init();
+void msg_proc(struct ap_hash_t *aphash, struct msg_head_t *msg);
+#endif /* __PROCESS_H__ */

@@ -52,19 +52,16 @@ LIBDIR = $(TOPDIR)/lib
 export LIB LIBDIR
 
 ACDIR = $(TOPDIR)/ac
-acser: $(LIB) 
+acser: 
 	@$(MAKE) -C $(ACDIR)
 
 APDIR = $(TOPDIR)/ap
-apcli: $(LIB)
+apcli:
 	@$(MAKE) -C $(APDIR)
 
 TESTDIR = $(TOPDIR)/test
-test: $(LIB)
+test: FORCE
 	@$(MAKE) -C $(TESTDIR)
-
-$(LIB): FORCE
-	@$(MAKE) -C $(LIBDIR)
 
 tags: FORCE
 	@find  . -name "*.h" -o -name "*.c" -o -name "*.s" > cscope.files

@@ -22,7 +22,9 @@
 #include <errno.h>
 #include <pthread.h>
 #include <netinet/in.h>
+#include <linux/if_ether.h>
 
+#include "dllayer.h"
 #include "log.h"
 
 #ifndef MAX_AP
@@ -40,8 +42,8 @@ struct ap_status_t {
 };
 
 struct ap_t {
-	char 			mac[6];
-	char 			ip[4];
+	int 			isreg;
+	char 			mac[ETH_ALEN];
 	time_t 			timestamp;
 	struct ap_status_t 	ap_status;
 };
@@ -51,7 +53,7 @@ struct message_t {
 	/* dllayer or tcp */
 	int 			proto;
 	struct message_t  	*next;
-	char 			data[512];
+	char 			data[DLL_PKT_DATALEN];
 };
 
 /* ap hash table */
@@ -60,13 +62,20 @@ struct ap_hash_t {
 	pthread_mutex_t 	lock; 
 	struct ap_t 		ap;
 	struct message_t 	*next;
-	struct message_t 	*tail;
-
+	struct message_t 	**ptail;
+	int 			count;
 };
 
 extern struct ap_hash_t *aphead;
 extern unsigned int conflict_count;
- 
+/* all ap in net, not reg counter */
+unsigned int ap_innet_cnt;
+/* all ap in reg */
+unsigned int ap_reg_cnt;
+
 void hash_init();
-struct ap_hash_t *hash_ap(char *data, int type);
+struct ap_hash_t *hash_ap(char *mac);
+void message_insert(struct ap_hash_t *aphash, struct message_t *msg);
+struct message_t *message_delete(struct ap_hash_t *aphash);
+void *message_travel(void *arg);
 #endif /* __APHASH_H__ */

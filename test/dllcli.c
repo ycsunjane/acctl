@@ -23,7 +23,7 @@
 int debug = 1;
 int main()
 {
-	dll_init("enp3s0");
+	dll_init("enp3s0", NULL, NULL, NULL);
 	char data[100];
 	int ret;
 	while(1) {

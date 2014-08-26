@@ -6,7 +6,7 @@
  *    Description:  
  *
  *        Version:  1.0
- *        Created:  2014年08月18日 17时30分36秒
+ *        Created:  2014年08月26日 09时05分59秒
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -17,13 +17,26 @@
  */
 #include <stdio.h>
 #include <stdint.h>
-#include <pthread.h>
 
 #include "arg.h"
-#include "net.h"
-#include "msg.h"
-#include "aphash.h"
+#include "message.h"
 #include "process.h"
+#include "msg.h"
+#include "net.h"
+
+void ui();
+
+int main(int argc, char *argv[])
+{
+	proc_arg(argc, argv);
+	/* create recv pthread */
+	net_init();
+	/* create message loop travel pthread */
+	message_init();
+
+	ui();
+	return 0;
+}
 
 void ui()
 {
@@ -39,16 +52,4 @@ void ui()
 			}
 		}
 	}
-}
-
-int main(int argc, char *argv[])
-{
-	proc_arg(argc, argv);
-
-	msg_init();
-	hash_init();
-	net_init();
-
-	ui();
-	return 0;
 }

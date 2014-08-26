@@ -17,8 +17,77 @@
  */
 #include <stdio.h>
 #include <stdint.h>
-#include "arg.h"
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <string.h>
+#include <errno.h>
+#include <linux/if_ether.h>
 
-struct arg_t argument;
+#include "arg.h"
+#include "log.h"
+
+struct arg_t argument = {0};
 int debug = 0;
 int daemon_mode = 0;
+
+static void __getmac(char *nic, char *mac)
+{
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(sockfd < 0)  {
+		sys_err("Create sock for get mac failed: %s\n",
+			strerror(errno));
+		exit(-1);
+	}
+
+	struct ifreq req;
+	strncpy(&req.ifr_name[0], nic, IFNAMSIZ);
+	ioctl(sockfd, SIOCGIFHWADDR, &req);
+	memcpy(mac, req.ifr_hwaddr.sa_data, ETH_ALEN);
+	close(sockfd);
+}
+
+#ifdef SERVER
+static  void __getaddr(char *nic, struct sockaddr_in *addr)
+{
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(sockfd < 0)  {
+		sys_err("Create sock for get mac failed: %s\n",
+			strerror(errno));
+		exit(-1);
+	}
+
+	struct ifreq req;
+	strncpy(&req.ifr_name[0], nic, IFNAMSIZ);
+	ioctl(sockfd, SIOCGIFADDR, &req);
+	memcpy(addr, &req.ifr_addr, sizeof(struct sockaddr_in));
+	close(sockfd);
+}
+#endif
+
+/* check argment */
+static void __check_arg()
+{
+	if(argument.nic[0] == 0) {
+		sys_err("No nic specified\n");
+		help();
+		exit(-1);
+	}
+	__getmac(&argument.nic[0], &argument.mac[0]);
+
+#ifdef SERVER
+	/* default ac broadcast interval */
+	argument.brditv = (argument.brditv == 0) ? 30 : argument.brditv;
+	__getaddr(&argument.nic[0], &argument.addr);
+	argument.port = (argument.port == 0) ? 7960 : argument.port;
+	argument.addr.sin_port = htons(argument.port);
+#endif
+}
+
+void proc_arg(int argc, char *argv[])
+{
+	proc_cfgarg();
+	proc_cmdarg(argc, argv);
+	__check_arg();
+}

@@ -52,4 +52,20 @@ extern int debug;
 #define pure_info(fmt, ...) 	NULL
 #endif
 
+#ifdef DEBUG
+#define pr_mac(mac) 						\
+do { 								\
+	printf("%02x%02x%02x%02x%02x%02x\n", 			\
+		(unsigned char) mac[0], 			\
+		(unsigned char) mac[1], 			\
+		(unsigned char) mac[2], 			\
+		(unsigned char) mac[3], 			\
+		(unsigned char) mac[4], 			\
+		(unsigned char) mac[5]); 			\
+} while(0)
+#else
+#define pr_mac(mac) 	NULL
+#endif
+
+
 #endif /* __LOG_H__ */

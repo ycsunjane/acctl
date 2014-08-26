@@ -17,11 +17,22 @@
  */
 #include <stdio.h>
 #include <stdint.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "aphash.h"
+#include "thread.h"
+#include "arg.h"
+#include "msg.h"
+#include "process.h"
 
 struct ap_hash_t *aphead = NULL;
 unsigned int conflict_count = 0;
+/* all ap in net, not reg counter */
+unsigned int ap_innet_cnt = 0;
+/* all ap in reg */
+unsigned int ap_reg_cnt = 0;
 
 static unsigned int 
 __elfhash(char* str, unsigned int len)  
@@ -58,15 +69,15 @@ __hash_isconflict(char *src, char *dest, int len)
 	return 0;
 }
 
-struct ap_hash_t *hash_ap(char *data, int type)
+struct ap_hash_t *hash_ap(char *mac)
 {
-	assert(data != NULL && (type == ETH || type = TCP));
+	assert(mac != NULL);
 
 	char *dest;
-	int total = 0, key, len;
+	int total = 0, key, len = 6;
 	struct ap_hash_t *aphash = NULL;
 
-	key = __hash_key(data, len);
+	key = __hash_key(mac, len);
 
 	do {
 		if(aphash)
@@ -75,13 +86,13 @@ struct ap_hash_t *hash_ap(char *data, int type)
 		aphash = aphead + key;
 
 		pthread_mutex_lock(&aphash->lock);
-		dest = (type == ETH) ? aphash->ap.mac : 
-			aphash->ap.ip;
-		len = (type == ETH) ? 6 : 4;
+		dest = aphash->ap.mac; 
 
+		/* new ap */
 		if(aphash->key == IDLE_AP) {
 			aphash->key = key;
-			memcpy(dest, data, len);
+			memcpy(dest, mac, len);
+			ap_innet_cnt++;
 			pthread_mutex_unlock(&aphash->lock);
 			return aphash;
 		}
@@ -90,28 +101,87 @@ struct ap_hash_t *hash_ap(char *data, int type)
 
 		total++;
 		key = (key + 1) % MAX_AP;
-	} while(__hash_isconflict(data, dest, len)
-		&& total < MAX_AP);
-	key--;
+	} while(total <= MAX_AP && 
+		__hash_isconflict(mac, dest, len));
+	key = (key + MAX_AP - 1) % MAX_AP;
+	assert(key >= 0 && key < MAX_AP);
 
-	if(total == MAX_AP) {
+	if(total > MAX_AP) {
 		pthread_mutex_unlock(&aphash->lock);
 		sys_warn("Hash bucket have full\n");
 		return NULL;
 	} else {
-		aphash->key = key;
-		memcpy(dest, data, len);
+		/* old ap */
+		assert(aphash->key == key);
 		pthread_mutex_unlock(&aphash->lock);
 		return aphash;
+	}
+}
+
+void message_insert(struct ap_hash_t *aphash, struct message_t *msg)
+{
+	assert(aphash != NULL);
+
+	msg->next = NULL;
+
+	pthread_mutex_lock(&aphash->lock);
+	*aphash->ptail = msg;
+	aphash->ptail = &msg->next; 
+	aphash->count++;
+	pthread_mutex_unlock(&aphash->lock);
+}
+
+struct message_t *message_delete(struct ap_hash_t *aphash)
+{
+	if(aphash->next == NULL)
+		return NULL;
+
+	struct message_t *msg;
+
+	pthread_mutex_lock(&aphash->lock);
+	msg = aphash->next;
+	aphash->next  = msg->next;
+	aphash->count--;
+
+	if(&msg->next == aphash->ptail)
+		aphash->ptail = &aphash->next;
+	pthread_mutex_unlock(&aphash->lock);
+
+	return msg;
+}
+
+void message_free(struct message_t *msg)
+{
+	free(msg);
+}
+
+void *message_travel(void *arg)
+{
+	assert(aphead != NULL);
+
+	struct ap_hash_t *aphash;
+	struct message_t *msg;
+	int i;
+	while(1) {
+		sleep(argument.msgitv);
+
+		for(i = 0; i < MAX_AP; i++) {
+			aphash = aphead + i;
+			while((msg = message_delete(aphash))) {
+				msg_proc(aphash, 
+					(struct msg_head_t *)&msg->data[0]);
+				message_free(msg);
+			}
+		}
 	}
 }
 
 void hash_init()
 {
 	assert(aphead == NULL);
-	_Static_assert(MAX_AP < (1ul << 32), "ap num too large\n");
+	_Static_assert(MAX_AP < (1ull << 32), "ap num too large\n");
 
-	aphead = malloc(sizeof(struct ap_hash_t) * HASH_BUCKET_LEN);
+	aphead = calloc(1, sizeof(struct ap_hash_t) * MAX_AP);
 	if(aphead == NULL) {
 		sys_err("Malloc hash bucket failed: %s\n", 
 			strerror(errno));
@@ -121,8 +191,12 @@ void hash_init()
 	int i;
 	for(i = 0; i < MAX_AP; i++) {
 		aphead[i].key = IDLE_AP;
+		aphead[i].ptail = &aphead[i].next;
 		pthread_mutex_init(&aphead[i].lock, 0);
 	}
+
+	/* create thread process all message */
+	__create_pthread(message_travel, NULL);
 	return;
 }
 

@@ -6,7 +6,7 @@
  *    Description:  
  *
  *        Version:  1.0
- *        Created:  2014年08月20日 14时25分43秒
+ *        Created:  08/26/14 14:26:10
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -19,4 +19,5 @@
 #define __NET_H__
 
 void net_init();
-#endif /*__NET_H__*/
+void *__net_netrcv(void *arg);
+#endif /* __NET_H__ */

@@ -1,12 +1,12 @@
 /*
  * =====================================================================================
  *
- *       Filename:  net.h
+ *       Filename:  netlayer.h
  *
  *    Description:  
  *
  *        Version:  1.0
- *        Created:  2014年08月20日 14时25分43秒
+ *        Created:  2014年08月26日 15时55分53秒
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -15,8 +15,13 @@
  *
  * =====================================================================================
  */
-#ifndef __NET_H__
-#define __NET_H__
+#ifndef __NETLAYER_H__
+#define __NETLAYER_H__
+#include <netinet/in.h>
 
-void net_init();
-#endif /*__NET_H__*/
+extern struct nettcp_t tcp;
+
+int tcp_connect(struct sockaddr_in addr, int reconnect);
+int tcp_rcv(char *data, int size);
+int tcp_sendpkt(char *data, int size);
+#endif /* __NETLAYER_H__ */

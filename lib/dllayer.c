@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -33,10 +34,7 @@
 #include <pthread.h>
 
 #include "log.h"
-
-#define ETH_INNO 		(0x8d8d)
-#define DLL_PKT_MAXLEN 		(512)
-#define DLL_PKT_DATALEN 	(DLL_PKT_MAXLEN - sizeof(struct ethhdr))
+#include "dllayer.h"
 
 struct dlleth_t {
 	struct ethhdr 	hdr;
@@ -197,10 +195,12 @@ void __build_sdrll(char *mac)
 	ll->sll_addr[7]  = 0x00;
 }
 
-void __init_brdcast()
+void __init_brdcast(int *sock)
 {
 	pthread_mutex_init(&dllbrd.lock, NULL);
 	dllbrd.brdsock = __create_sock(1);
+	if(sock)
+		*sock = dllbrd.brdsock;
 	__build_brdll();
 }
 
@@ -215,18 +215,22 @@ void __dll_buildpkt(char *dmac, char *data, int size)
 	memcpy(deth->data, data, size);
 }
 
-static void __init_sdr()
+static void __init_sdr(int *sock)
 {
 	pthread_mutex_init(&dllsdr.lock, NULL);
 	dllsdr.sdrsock = __create_sock(0);
+	if(sock)
+		*sock = dllsdr.sdrsock;
 }
 
-static void __init_rcv()
+static void __init_rcv(int *sock)
 {
 	int ret;
 
 	pthread_mutex_init(&dllrcv.lock, NULL);
 	dllrcv.rcvsock = __create_sock(0);
+	if(sock)
+		*sock = dllrcv.rcvsock;
 
 	__build_rcvll(1);
 	ret = bind(dllrcv.rcvsock, (struct sockaddr *)&dllrcv.ll, 
@@ -297,17 +301,24 @@ int dll_rcv(char *data, int size)
 	ret = recvfrom(dllrcv.rcvsock, dllrcv.rcvpkt, 
 		DLL_PKT_MAXLEN, 0, 
 		(struct sockaddr *)&dllrcv.ll, &dllrcv.recvlen);
-	if(ret < 0) {
+	if(ret < sizeof(struct ethhdr)) {
 		sys_warn("recv pkt failed: %s\n", strerror(errno));
 		UNLOCK_RCV();
 		return -1;
 	}
-	memcpy(data, dllrcv.rcvpkt, size);
+
+	struct ethhdr *hdr = (struct ethhdr *)dllrcv.rcvpkt;
+	if(ntohs(hdr->h_proto) != ETH_INNO) {
+		sys_warn("Reciv error dllayer packet\n");
+		return -1;
+	}
+
+	memcpy(data, dllrcv.rcvpkt + sizeof(struct ethhdr), size);
 	UNLOCK_RCV();
 	return (ret > size) ? size: ret;
 }
 
-void dll_init(char *nic)
+void dll_init(char *nic, int *rcvsock, int *sdrsock, int *brdsock)
 {
 	assert(nic != NULL);
 
@@ -315,8 +326,8 @@ void dll_init(char *nic)
 	__init_nic(sock, nic);
 	close(sock);
 	__init_pktbuf(&dllnic.mac[0]);
-	__init_brdcast();
-	__init_rcv();
-	__init_sdr();
+	__init_brdcast(brdsock);
+	__init_rcv(rcvsock);
+	__init_sdr(sdrsock);
 }
 
