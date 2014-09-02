@@ -29,7 +29,7 @@ struct message_t {
 	/* dllayer or tcp */
 	int 			proto;
 	struct message_t  	*next;
-	char 			data[DLL_PKT_DATALEN];
+	char 			data[0];
 };
 
 extern int message_num;

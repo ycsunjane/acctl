@@ -17,89 +17,181 @@
  */
 #include <stdio.h>
 #include <stdint.h>
-#include <netinet/in.h>
+#include <unistd.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
 #include <assert.h>
+#include <fcntl.h>
+#include <signal.h>
 
 #include "log.h"
-struct nettcp_t {
-	int sock;
-	int loop;
-	struct sockaddr_in addr;
-};
+#include "link.h"
+#include "netlayer.h"
 
-struct nettcp_t tcp = {0};
+static int __tcp_alive(struct nettcp_t *tcp)
+{
 
-int tcp_connect(struct sockaddr_in addr, int reconnect)
+	int optval = 1;
+	int optlen = sizeof(optval);
+	if(setsockopt(tcp->sock, SOL_SOCKET, 
+			SO_KEEPALIVE, &optval, optlen) < -1) {
+		sys_err("Set tcp keepalive failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	optval = 30;
+	if(setsockopt(tcp->sock, SOL_TCP, 
+			TCP_KEEPCNT, &optval, optlen) < -1) {
+		sys_err("Set tcp_keepalive_probes failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	optval = 30;
+	if(setsockopt(tcp->sock, SOL_TCP, 
+			TCP_KEEPIDLE, &optval, optlen) < -1) {
+		sys_err("Set tcp_keepalive_time failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	optval = 5;
+	if(setsockopt(tcp->sock, SOL_TCP, 
+			TCP_KEEPINTVL, &optval, optlen) < -1) {
+		sys_err("Set tcp_keepalive_intvl failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+int tcp_connect(struct nettcp_t *tcp)
 {
 	int ret;
 
-	if(!reconnect) {
-		tcp.sock = socket(AF_INET, SOCK_STREAM, 0);
-		if(tcp.sock < 0) {
-			sys_err("Create tcp sock failed: %s\n",
-				strerror(errno));
-			return -1;
-		}
-
-		tcp.addr = addr;
+	tcp->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if(tcp->sock < 0) {
+		sys_err("Create tcp sock failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+	ret = __tcp_alive(tcp);
+	if(ret < 0) {
+		sys_err("Set tcp alive failed\n");
+		tcp_close(tcp);
+		return -1;
 	}
 
 	socklen_t addr_len = sizeof(struct sockaddr_in);
-	ret = connect(tcp.sock, (struct sockaddr *)&addr, addr_len);
+	ret = connect(tcp->sock, (struct sockaddr *)&tcp->addr, addr_len);
 	if(ret < 0) {
+		tcp_close(tcp);
 		sys_err("Connect ac failed: %s\n", strerror(errno));
 		return -1;
 	}
-	tcp.loop = 3;
-	return tcp.sock;
+
+	return tcp->sock;
 }
 
-int tcp_rcv(char *data, int size)
+int tcp_rcv(struct nettcp_t *tcp, char *data, int size)
 {
 	assert(data != NULL);
+
+	if(tcp->sock == -1) return -1;
 
 	int recvlen;
-retry:
-	recvlen = recv(tcp.sock, data, size, 0);
-	if(recvlen < 0) {
+	/* tcp recv in close_wait select will return 1
+	 * recv will return 0 */
+	recvlen = recv(tcp->sock, data, size, 0);
+	if(recvlen <= 0)
 		sys_err("tcp recv failed: %s\n", strerror(errno));
-		if(errno == EINTR)
-			goto retry;
-		if(errno == ETIMEDOUT)
-			goto recnt;
-	}
 	return recvlen;
-recnt:
-	if(!tcp.loop) return -1;
-	tcp_connect(tcp.addr, 1);
-	tcp.loop--;
-	goto retry;
 }
 
-int tcp_sendpkt(char *data, int size)
+int tcp_sendpkt(struct nettcp_t *tcp, char *data, int size)
 {
-	assert(data != NULL);
+	assert(data != NULL && size <= NET_PKT_DATALEN);
+
+	if(tcp->sock == -1) return -1;
 
 	int sdrlen;
-retry:
-	sdrlen = send(tcp.sock, data, size, 0);
-	if(sdrlen < 0) {
+	/* tcp close_wait will cause SIGPIPE */
+	sdrlen = send(tcp->sock, data, size, 0);
+	if(sdrlen <= 0)
 		sys_err("tcp send failed: %s\n", strerror(errno));
-		if(errno == EINTR)
-			goto retry;
-		if(errno == EPIPE)
-			goto recnt;
-	}
 	return sdrlen;
-recnt:
-	if(!tcp.loop) return -1;
-	tcp_connect(tcp.addr, 1);
-	tcp.loop--;
-	goto retry;
 }
 
+void tcp_close(struct nettcp_t *tcp)
+{
+	close(tcp->sock);
+	tcp->sock = -1;
+}
+
+#ifdef SERVER
+#define BACKLOG 	(512)
+int tcp_listen(struct nettcp_t *tcp)
+{
+	int ret;
+
+	tcp->sock = socket(AF_INET, SOCK_STREAM, 0);
+	if(tcp->sock < 0) {
+		sys_err("Create tcp sock failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	int reuseaddr = 1;
+	ret = setsockopt(tcp->sock, SOL_SOCKET, SO_REUSEADDR,
+		&reuseaddr, sizeof(reuseaddr));
+	if(ret < 0) {
+		sys_err("set sock reuse failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	socklen_t socklen = sizeof(struct sockaddr_in);
+	ret = bind(tcp->sock, 
+		(struct sockaddr *)&tcp->addr, socklen);
+	if(ret < 0) {
+		sys_err("Bind tcp sock failed: %s\n",
+			strerror(errno));
+		tcp_close(tcp);
+		return -1;
+	}
+
+	ret = listen(tcp->sock, BACKLOG);
+	if(ret < 0) {
+		sys_err("Bind tcp sock failed: %s\n",
+			strerror(errno));
+		tcp_close(tcp);
+		return -1;
+	}
+
+	return tcp->sock;
+}
+
+int tcp_accept(struct nettcp_t *tcp, void *func(void *))
+{
+	int clisock;
+	clisock = accept(tcp->sock, NULL, NULL);
+	if(clisock < 0) {
+		sys_err("Accept tcp sock failed: %s\n",
+			strerror(errno));
+		return -1;
+	}
+
+	sys_debug("New client:%d\n", clisock);
+#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
+	__insert_sockarr(clisock, func, (void *)clisock);
+	return clisock;
+}
+#endif

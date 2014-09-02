@@ -23,9 +23,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <linux/if_ether.h>
+#include <netinet/in.h>
 
 #include "dllayer.h"
-#include "netlayer.h"
 #include "aphash.h"
 #include "net.h"
 #include "log.h"
@@ -54,7 +54,6 @@ static void *__net_dllbrd(void *arg)
 	return NULL;
 }
 
-/* pthread recv dllayer */
 static void *__net_dllrecv(void *arg)
 {
 	struct message_t *msg;
@@ -64,86 +63,117 @@ static void *__net_dllrecv(void *arg)
 	struct ap_t *ap;
 	struct ap_hash_t *aphash;
 
-	while(1) {
-		msg = malloc(sizeof(struct message_t));
-		if(msg == NULL) {
-			sys_warn("malloc memory for dllayer failed: %s\n", 
-				strerror(errno));
-			continue;
-		}
-
-		rcvlen = dll_rcv(msg->data, DLL_PKT_DATALEN);
-		if(rcvlen < sizeof(struct ethhdr)) {
-			free(msg);
-			continue;
-		}
-
-		head = (struct msg_head_t *)(msg->data);
-		mac = &head->mac[0];
-		aphash = hash_ap(mac);
-		if(aphash == NULL) {
-			free(msg);
-			continue;
-		}
-
-		ap = &aphash->ap;
-		ap->timestamp = time(NULL);
-
-		msg->proto = TCP; 
-		message_insert(aphash, msg);
+	msg = malloc(sizeof(struct message_t) + DLL_PKT_DATALEN);
+	if(msg == NULL) {
+		sys_warn("malloc memory for dllayer failed: %s\n", 
+			strerror(errno));
+		goto err;
 	}
+
+	rcvlen = dll_rcv(msg->data, DLL_PKT_DATALEN);
+	if(rcvlen < (int)sizeof(struct ethhdr)) {
+		free(msg);
+		goto err;
+	}
+
+	head = (struct msg_head_t *)(msg->data);
+	mac = &head->mac[0];
+	aphash = hash_ap(mac);
+	if(aphash == NULL) {
+		free(msg);
+		goto err;
+	}
+
+	ap = &aphash->ap;
+	ap->timestamp = time(NULL);
+
+	msg->proto = TCP; 
+	message_insert(aphash, msg);
+
+err:
 	return NULL;
 }
 
 /* pthread recv netlayer */
-static void *__net_netrecv(void *arg)
+static void *__net_netrcv(void *arg)
 {
+#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
+	int clisock = (int)arg;
+
 	struct message_t *msg;
 	int rcvlen;
 	struct ethhdr *hdr;
 	char *mac;
 	struct ap_t *ap;
 	struct ap_hash_t *aphash;
+	struct nettcp_t tcp;
+	tcp.sock = clisock;
+
+	msg = malloc(sizeof(struct message_t) + NET_PKT_DATALEN);
+	if(msg == NULL) {
+		sys_warn("malloc memory for dllayer failed: %s\n", 
+			strerror(errno));
+		goto err;
+	}
+
+	rcvlen = tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
+	if(rcvlen <= 0) {
+		ap_lost(&tcp, 0);
+		free(msg);
+		goto err;
+	}
+
+	hdr = (struct ethhdr *)&msg->data[0];
+	mac = (char *)&hdr->h_source[0];
+	aphash = hash_ap(mac);
+	if(aphash == NULL) {
+		free(msg);
+		goto err;
+	}
+
+	ap = &aphash->ap;
+	ap->timestamp = time(NULL);
+	ap->sock = clisock;
+
+	msg->proto = ETH;
+	message_insert(aphash, msg);
+err:
+	return NULL;
+}
+
+static void *__net_netlisten(void *arg)
+{
+	int ret;
+	struct nettcp_t tcplisten;
+	tcplisten.addr.sin_family = AF_INET;
+	tcplisten.addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	tcplisten.addr.sin_port = htons(argument.port);
+	ret = tcp_listen(&tcplisten);
+	if(ret < 0) {
+		sys_err("Create listen tcp failed\n");
+		exit(-1);
+	}
 
 	while(1) {
-		msg = malloc(sizeof(struct message_t));
-		if(msg == NULL) {
-			sys_warn("malloc memory for dllayer failed: %s\n", 
-				strerror(errno));
-			continue;
-		}
-
-		rcvlen = tcp_rcv(msg->data, DLL_PKT_DATALEN);
-		if(rcvlen < 0) {
-			free(msg);
-			continue;
-		}
-
-		hdr = (struct ethhdr *)&msg->data[0];
-		mac = (char *)&hdr->h_source[0];
-		aphash = hash_ap(mac);
-		if(aphash == NULL) {
-			free(msg);
-			continue;
-		}
-
-		ap = &aphash->ap;
-		ap->timestamp = time(NULL);
-
-		msg->proto = ETH;
-		message_insert(aphash, msg);
+		tcp_accept(&tcplisten, __net_netrcv);
+		sys_debug("accept connect\n");
 	}
-	return NULL;
 }
 
 void net_init()
 {
-	struct sockarr_t *rcvsock = __insert_sockarr(__net_dllrecv);
-	dll_init(&argument.nic[0], &rcvsock->sock, NULL, NULL);
+	int sock;
+
+	dll_init(&argument.nic[0], &sock, NULL, NULL);
+	__insert_sockarr(sock, __net_dllrecv, NULL);
 
 	/* create pthread recv msg */
-	__create_pthread(net_recv, __head);
-	sys_debug("Create pthread recv dllayer msg\n");
+	__create_pthread(net_recv, NULL);
+	sys_debug("Create pthread net_recv msg\n");
+
+	/* create pthread tcp listen */
+	__create_pthread(__net_netlisten, NULL);
+	sys_debug("Create pthread tcp listen\n");
 
 	/* create pthread broadcast ac probe packet */
 	__create_pthread(__net_dllbrd, NULL);

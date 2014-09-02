@@ -18,6 +18,7 @@
 #ifndef __NET_H__
 #define __NET_H__
 
+extern struct nettcp_t tcp;
 void net_init();
 void *__net_netrcv(void *arg);
 #endif /* __NET_H__ */

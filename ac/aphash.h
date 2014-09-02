@@ -43,6 +43,8 @@ struct ap_status_t {
 
 struct ap_t {
 	int 			isreg;
+	int 			sock;
+	struct sockaddr_in 	addr;
 	char 			mac[ETH_ALEN];
 	time_t 			timestamp;
 	struct ap_status_t 	ap_status;
@@ -53,7 +55,7 @@ struct message_t {
 	/* dllayer or tcp */
 	int 			proto;
 	struct message_t  	*next;
-	char 			data[DLL_PKT_DATALEN];
+	char 			data[0];
 };
 
 /* ap hash table */

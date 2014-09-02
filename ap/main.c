@@ -17,17 +17,33 @@
  */
 #include <stdio.h>
 #include <stdint.h>
+#include <signal.h>
 
 #include "arg.h"
 #include "message.h"
 #include "process.h"
 #include "msg.h"
 #include "net.h"
+#include "netlayer.h"
+#include "log.h"
+#include "link.h"
+#include "thread.h"
 
 void ui();
 
+static void sigpipe_callback(int signum)
+{
+	sys_warn("Lost tcp connect\n");
+	ac_lost(1);
+}
+
 int main(int argc, char *argv[])
 {
+	struct sigaction sig;
+	memset(&sig, 0, sizeof(sig));
+	sig.sa_handler = sigpipe_callback;
+	sigaction(SIGPIPE, &sig, NULL);
+
 	proc_arg(argc, argv);
 	/* create recv pthread */
 	net_init();

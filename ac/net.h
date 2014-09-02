@@ -17,6 +17,7 @@
  */
 #ifndef __NET_H__
 #define __NET_H__
+#include "netlayer.h"
 
 void net_init();
 #endif /*__NET_H__*/

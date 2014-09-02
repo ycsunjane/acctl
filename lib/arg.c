@@ -83,6 +83,9 @@ static void __check_arg()
 	argument.port = (argument.port == 0) ? 7960 : argument.port;
 	argument.addr.sin_port = htons(argument.port);
 #endif
+#ifdef CLIENT
+	argument.reportitv = (argument.reportitv == 0) ? 30 : argument.reportitv;
+#endif
 }
 
 void proc_arg(int argc, char *argv[])

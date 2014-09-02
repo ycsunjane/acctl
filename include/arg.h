@@ -28,10 +28,19 @@ struct arg_t {
 	int 	port;
 	struct sockaddr_in addr;
 #endif
+#ifdef CLIENT
+	int 	reportitv; 
+#endif
 	int 	msgitv;
 	/* avoid gcc warning */
 	char 	nic[IFNAMSIZ];
 	char 	mac[ETH_ALEN];
+};
+
+enum {
+	ARG_DEBUG = 1,
+	ARG_WARN,
+	ARG_LOCK,
 };
 
 extern struct arg_t argument;

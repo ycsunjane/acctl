@@ -19,9 +19,19 @@
 #define __NETLAYER_H__
 #include <netinet/in.h>
 
-extern struct nettcp_t tcp;
+#define NET_PKT_DATALEN 	(2048)
 
-int tcp_connect(struct sockaddr_in addr, int reconnect);
-int tcp_rcv(char *data, int size);
-int tcp_sendpkt(char *data, int size);
+struct nettcp_t {
+	int sock;
+	struct sockaddr_in addr;
+};
+
+int tcp_connect(struct nettcp_t *tcp);
+int tcp_rcv(struct nettcp_t *tcp, char *data, int size);
+int tcp_sendpkt(struct nettcp_t *tcp, char *data, int size);
+void tcp_close(struct nettcp_t *tcp);
+#ifdef SERVER
+int tcp_listen(struct nettcp_t *tcp);
+int tcp_accept(struct nettcp_t *tcp, void *func(void *));
+#endif
 #endif /* __NETLAYER_H__ */

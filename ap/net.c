@@ -30,29 +30,31 @@
 #include "thread.h"
 #include "arg.h"
 #include "link.h"
+#include "process.h"
 
+struct nettcp_t tcp;
 /* recv dllayer */
 static void *__net_dllrecv(void *arg)
 {
 	struct message_t *msg;
 	int rcvlen;
 
-	while(1) {
-		msg = malloc(sizeof(struct message_t));
-		if(msg == NULL) {
-			sys_warn("malloc memory for dllayer failed: %s\n", 
-				strerror(errno));
-			continue;
-		}
-
-		rcvlen = dll_rcv(msg->data, DLL_PKT_DATALEN);
-		if(rcvlen < sizeof(struct ethhdr)) {
-			free(msg);
-			continue;
-		}
-		msg->proto = ETH;
-		message_insert(msg);
+	msg = malloc(sizeof(struct message_t) + 
+		DLL_PKT_DATALEN);
+	if(msg == NULL) {
+		sys_warn("malloc memory for dllayer failed: %s\n", 
+			strerror(errno));
+		goto err;
 	}
+
+	rcvlen = dll_rcv(msg->data, DLL_PKT_DATALEN);
+	if(rcvlen < (int)sizeof(struct ethhdr)) {
+		free(msg);
+		goto err;
+	}
+	msg->proto = ETH;
+	message_insert(msg);
+err:
 	return NULL;
 }
 
@@ -62,29 +64,33 @@ void *__net_netrcv(void *arg)
 	struct message_t *msg;
 	int rcvlen;
 
-	while(1) {
-		msg = malloc(sizeof(struct message_t));
-		if(msg == NULL) {
-			sys_warn("malloc memory for dllayer failed: %s\n", 
-				strerror(errno));
-			continue;
-		}
-
-		rcvlen = tcp_rcv(msg->data, DLL_PKT_DATALEN);
-		if(rcvlen < 0) {
-			free(msg);
-			continue;
-		}
-		msg->proto = TCP;
-		message_insert(msg);
+	msg = malloc(sizeof(struct message_t) + NET_PKT_DATALEN);
+	if(msg == NULL) {
+		sys_warn("malloc memory for dllayer failed: %s\n", 
+			strerror(errno));
+		goto err;
 	}
+
+	rcvlen = tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
+	if(rcvlen <= 0) {
+		/* __net_netrcv in select lock, so no need lock anymore
+		 * can only delete own sockarr */
+		ac_lost(0);
+		free(msg);
+		goto err;
+	}
+	msg->proto = TCP;
+	message_insert(msg);
+
+err:
 	return NULL;
 }
 
 void net_init()
 {
-	struct sockarr_t *rcvsock = __insert_sockarr(__net_dllrecv);
-	dll_init(&argument.nic[0], &rcvsock->sock, NULL, NULL);
+	int sock;
+	dll_init(&argument.nic[0], &sock, NULL, NULL);
+	__insert_sockarr(sock, __net_dllrecv, NULL);
 
 	/* create pthread recv msg */
 	__create_pthread(net_recv, head);

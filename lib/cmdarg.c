@@ -33,30 +33,40 @@ static struct option long_arg[] = {
 	{"brditv", has_arg, 0, 'b'},
 	{"port", has_arg, 0, 'p'},
 #endif
+#ifdef CLIENT
+	{"reportitv", has_arg, 0, 'r'},
+#endif
 	{"msgitv", has_arg, 0, 'm'},
-	{"debug", 0, 0, '*'},
+	{"debug", has_arg, 0, 'l'},
 	{"help", 0, 0, '*'},
 	{0, 0, 0 , 0},
 };
 
 #ifdef SERVER
-#define SHORT_STR 	"n:db:p:m:"
-#else
-#define SHORT_STR 	"n:dm:"
+#define SHORT_STR 	"n:db:p:m:l:"
+#endif
+#ifdef CLIENT
+#define SHORT_STR 	"n:dm:r:l:"
+#endif
+#ifdef TEST
+#define SHORT_STR 	"n:dm:l:"
 #endif
 
 static char *help_array[] = {
 	"USAGE: ac [options]",
 	"acctl server",
 	"  -n, --nic 		nic which controller [required]",
-	"  -d, --daemon 	daemon mode",
+	"  -d, --daemon 		daemon mode",
 #ifdef SERVER
 	"  -b, --brditv 	ac broadcast interval (default 30)",
 	"  -p, --port 		ac listen port (default 7960)",
 #endif
-	"  -m, --msgitv 	msg travel interval (default 30)",
-	"  --debug 	enable debug, will auto disable daemon_mode",
-	"  --help 	help info",
+#ifdef CLIENT
+	"  -r, --reportitv 	ap report status interval (default 30)",
+#endif
+	"  -m, --msgitv  	interval travel all recevied message (default 30)",
+	"  -l, --debug 		enable debug (DEBUG = 1, WARN = 2, LOCK = 3, ALL = other), will auto disable daemon_mode",
+	"  --help 		help info",
 	NULL,
 };
 
@@ -73,7 +83,7 @@ static void __early_is_debug(int argc,char *argv[])
 {
 	int i, ret;
 	for(i = 0; i < argc; i++) {
-		ret = strcmp(argv[i], "-d");
+		ret = strcmp(argv[i], "-l");
 		if(ret == 0)  {
 			debug = 1;
 			return;
@@ -138,6 +148,15 @@ void proc_cmdarg(int argc, char *argv[])
 				__strtol(optarg, NULL, 10);	
 			break;
 #endif
+#ifdef CLIENT
+		case 'r':
+			argument.reportitv = 
+				__strtol(optarg, NULL, 10);	
+			break;
+#endif
+		case 'l':
+			debug = __strtol(optarg, NULL, 10);	
+			break;
 		case 'm':
 			argument.msgitv = 
 				__strtol(optarg, NULL, 10);	

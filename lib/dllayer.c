@@ -32,6 +32,7 @@
 #include <net/ethernet.h>
 #include <net/if_arp.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #include "log.h"
 #include "dllayer.h"
