@@ -43,15 +43,8 @@ void ui()
 	}
 }
 
-static void sigpipe_callback(int signum)
-{
-	sys_warn("Lost tcp connect\n");
-}
-
 int main(int argc, char *argv[])
 {
-	signal(SIGPIPE, sigpipe_callback);
-
 	proc_arg(argc, argv);
 
 	msg_init();

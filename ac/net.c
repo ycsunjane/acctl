@@ -35,25 +35,6 @@
 #include "process.h"
 #include "link.h"
 
-/* pthread broadcast */
-static void *__net_dllbrd(void *arg)
-{
-	struct msg_ac_brd_t *reqbuf = 
-		malloc(sizeof(struct msg_ac_brd_t));
-	strncpy(reqbuf->header.acuuid, acuuid, UUID_LEN-1);
-	reqbuf->header.msg_type = MSG_AC_BRD;
-	memcpy(&reqbuf->header.mac[0], &argument.mac[0], ETH_ALEN);
-	reqbuf->ipv4 = argument.addr;
-
-	while(1) {
-		sys_debug("Send a broadcast probe msg (next %d second later)\n", 
-			argument.brditv);
-		dll_brdcast((char *)reqbuf, sizeof(struct msg_ac_brd_t));
-		sleep(argument.brditv);
-	}
-	return NULL;
-}
-
 static void *__net_dllrecv(void *arg)
 {
 	struct message_t *msg;
@@ -150,7 +131,26 @@ err:
 	return NULL;
 }
 
-static void *__net_netlisten(void *arg)
+/* pthread broadcast */
+static void *net_dllbrd(void *arg)
+{
+	struct msg_ac_brd_t *reqbuf = 
+		malloc(sizeof(struct msg_ac_brd_t));
+	strncpy(reqbuf->header.acuuid, acuuid, UUID_LEN-1);
+	reqbuf->header.msg_type = MSG_AC_BRD;
+	memcpy(&reqbuf->header.mac[0], &argument.mac[0], ETH_ALEN);
+	reqbuf->ipv4 = argument.addr;
+
+	while(1) {
+		sys_debug("Send a broadcast probe msg (next %d second later)\n", 
+			argument.brditv);
+		dll_brdcast((char *)reqbuf, sizeof(struct msg_ac_brd_t));
+		sleep(argument.brditv);
+	}
+	return NULL;
+}
+
+static void *net_netlisten(void *arg)
 {
 	int ret;
 	struct nettcp_t tcplisten;
@@ -185,11 +185,11 @@ void net_init()
 	sys_debug("Create pthread net_recv msg\n");
 
 	/* create pthread tcp listen */
-	__create_pthread(__net_netlisten, NULL);
+	__create_pthread(net_netlisten, NULL);
 	sys_debug("Create pthread tcp listen\n");
 
 	/* create pthread broadcast ac probe packet */
-	__create_pthread(__net_dllbrd, NULL);
+	__create_pthread(net_dllbrd, NULL);
 	sys_debug("Create pthread broadcast dllayer msg\n");
 }
 
