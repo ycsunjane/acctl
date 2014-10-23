@@ -36,8 +36,6 @@
 
 char 	acuuid[UUID_LEN];
 
-#define X86_UUID 	"cat /sys/class/dmi/id/product_uuid"
-
 static void __get_cmd_stdout(char *cmd, char *buf, int len)
 {
 	FILE *fp;
@@ -55,13 +53,7 @@ static void __get_cmd_stdout(char *cmd, char *buf, int len)
 err:
 	buf[0] = 0;
 	sys_err("Exec %s failed: %s\n", cmd, strerror(errno));
-	return;
-}
-
-void msg_init()
-{
-	__get_cmd_stdout(X86_UUID, acuuid, UUID_LEN-1);
-	acuuid[UUID_LEN - 1] = 0;
+	exit(0);
 }
 
 static int __uuid_equ(char *src, char *dest)
@@ -108,10 +100,10 @@ static void __ap_status(struct ap_t *ap, char *data)
 	strncpy((char *)msg + sizeof(struct msg_ac_cmd_t), cmd, cmdlen);
 
 	struct nettcp_t tcp;
-	tcp.sock =  ap->sock;
+	tcp.sock = ap->sock;
 	ret = tcp_sendpkt(&tcp, (char *)msg, totallen);
 	if(ret <= 0)
-		ap_lost(&tcp, 1);
+		ap_lost(ap->sock);
 	free(msg);
 }
 
@@ -129,10 +121,16 @@ static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg)
 	ap_reg_cnt++;
 }
 
-void ap_lost(struct nettcp_t *tcp, int lock)
+#define X86_UUID 	"cat /sys/class/dmi/id/product_uuid"
+void msg_init()
 {
-	__delete_sockarr(tcp->sock, lock);
-	tcp_close(tcp);
+	__get_cmd_stdout(X86_UUID, acuuid, UUID_LEN-1);
+	acuuid[UUID_LEN - 1] = 0;
+}
+
+void ap_lost(int sock)
+{
+	delete_sockarr(sock);
 }
 
 void msg_proc(struct ap_hash_t *aphash, struct msg_head_t *msg)

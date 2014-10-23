@@ -109,7 +109,7 @@ static void __lost_reconnect()
 		pthread_mutex_unlock(&sysstat.lock);
 		return;
 	}
-	__insert_sockarr(tcp.sock, __net_netrcv, NULL);
+	insert_sockarr(tcp.sock, __net_netrcv, NULL);
 	sysstat.islost = 0;
 	sysstat.isreg = 1;
 	pthread_mutex_unlock(&sysstat.lock);
@@ -158,7 +158,7 @@ static void __response_brd(struct msg_ac_brd_t *msg)
 		}
 
 		pthread_mutex_lock(&sysstat.lock);
-		__insert_sockarr(tcp.sock, __net_netrcv, NULL);
+		insert_sockarr(tcp.sock, __net_netrcv, NULL);
 		sysstat.islost = 0;
 		sysstat.isreg = 1;
 		pthread_mutex_unlock(&sysstat.lock);
@@ -223,7 +223,7 @@ void msg_proc(struct msg_head_t *msg)
 void ac_lost(int lock)
 {
 	pthread_mutex_lock(&sysstat.lock);
-	__delete_sockarr(tcp.sock, lock);
+	delete_sockarr(tcp.sock);
 	tcp_close(&tcp);
 	sysstat.islost = 1;
 	pthread_mutex_unlock(&sysstat.lock);

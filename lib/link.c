@@ -24,7 +24,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <sys/time.h>
-#include <sys/select.h>
+#include <sys/epoll.h>
 #include <errno.h>
 
 #include "log.h"
@@ -45,61 +45,48 @@ do { 						\
 	pthread_mutex_unlock(&sockarr_lock); 	\
 }while(0)
 
-/* if add a new sock, newflag will be set 1 */
-static int newflag = 0;
+int epl;
+
+void net_epoll_init()
+{
+	epl = epoll_create1(EPOLL_CLOEXEC);
+	if(epl < 0) {
+		sys_err("Create epoll failed: %s(%d)\n", 
+			strerror(epl), epl);
+		exit(-1);
+	}
+
+	return;
+}
+
+#define EPOLLNUM 	(10)
+static struct epoll_event epollarr[EPOLLNUM];
 
 void * net_recv(void *arg)
 {
-	struct sockarr_t *sockarr, *back;
-
-	int ret;
-	int maxfd = 0;
-	fd_set rcvset, backset;
-
-	struct timeval timeout;
-	timeout.tv_sec = 3;
-
-reset:
-	SOCKARR_LOCK();
-	sockarr = __head;
-	FD_ZERO(&rcvset);
-	while(sockarr) {
-		maxfd = (maxfd > sockarr->sock) ?  maxfd : sockarr->sock + 1;
-		FD_SET(sockarr->sock, &rcvset);
-		sockarr = sockarr->next;
-	}
-	newflag = 0;
-	SOCKARR_UNLOCK();
-	backset = rcvset;
+	int ret, i;
+	struct sockarr_t *sockarr;
 
 	while(1) {
-		if(newflag == 1) goto reset;
-		rcvset = backset;
-		ret = select(maxfd, &rcvset, NULL, NULL, &timeout);
-		if(ret <= 0) {
-			timeout.tv_sec = 3;
-			continue;
+		ret = epoll_wait(epl, epollarr, EPOLLNUM, -1);
+		if(ret < 0) {
+			if(errno == EINTR)
+				continue;
+			sys_err("Epoll wait failed: %s(%d)\n", 
+				strerror(errno), errno);
+			exit(-1);
 		}
 
-		SOCKARR_LOCK();
-		sockarr = __head;
-		while(sockarr && ret) {
-			/* func can del sockarr with no lock */
-			back = sockarr->next;
-			if(FD_ISSET(sockarr->sock, &rcvset)) {
-				sockarr->func(sockarr->arg);
-				ret--;
-			}
-
-			sockarr = back;
+		for(i = 0; i < ret; i++) {
+			sockarr = epollarr[i].data.ptr;
+			sockarr->func(sockarr);
 		}
-		SOCKARR_UNLOCK();
 	}
 	return NULL;	
 }
 
 struct sockarr_t *
-__insert_sockarr(int sock, void *(*func) (void *), void *arg)
+insert_sockarr(int sock, void *(*func) (void *), void *arg)
 {
 	struct sockarr_t *__sock = malloc(sizeof(struct sockarr_t));
 	if(__sock == NULL) {
@@ -107,26 +94,37 @@ __insert_sockarr(int sock, void *(*func) (void *), void *arg)
 		exit(-1);
 	}
 
+	__sock->ev.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
+	__sock->ev.data.ptr = __sock;
 	__sock->sock = sock;
 	__sock->func = func;
 	__sock->arg = arg;
 	__sock->next = NULL;
 
+	/* add in epoll */
+	int ret;
+	ret = epoll_ctl(epl, EPOLL_CTL_ADD, 
+		__sock->sock, &__sock->ev);
+	if(ret < 0) {
+		sys_err("Add epoll fd failed: %s(%d)\n", 
+			strerror(errno), errno);
+		exit(-1);
+	}
+
 	SOCKARR_LOCK();
 	*__tail = __sock;
 	__tail = &__sock->next;
-	newflag = 1;
 	SOCKARR_UNLOCK();
 
 	return __sock;
 }
 
-int __delete_sockarr(int sock, int lock)
+int delete_sockarr(int sock)
 {
 	struct sockarr_t *cur;
 	struct sockarr_t **ppre;
 
-	if(lock) SOCKARR_LOCK();
+	SOCKARR_LOCK();
 	cur = __head;
 	ppre = &__head;
 
@@ -135,7 +133,6 @@ int __delete_sockarr(int sock, int lock)
 			*ppre = cur->next;
 			if(&cur->next == __tail)
 				__tail = ppre;
-			newflag = 1;
 			SOCKARR_UNLOCK();
 
 			close(sock);
@@ -145,7 +142,7 @@ int __delete_sockarr(int sock, int lock)
 		ppre = &cur->next;
 		cur = cur->next;
 	}
-	if(lock) SOCKARR_UNLOCK();
+	SOCKARR_UNLOCK();
 	return 0;
 }
 

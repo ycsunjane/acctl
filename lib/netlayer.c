@@ -103,16 +103,28 @@ int tcp_connect(struct nettcp_t *tcp)
 
 int tcp_rcv(struct nettcp_t *tcp, char *data, int size)
 {
-	assert(data != NULL);
+	assert(data != NULL && tcp->sock >= 0);
 
-	if(tcp->sock == -1) return -1;
+	int recvlen = 0, len;
 
-	int recvlen;
-	/* tcp recv in close_wait select will return 1
-	 * recv will return 0 */
-	recvlen = recv(tcp->sock, data, size, 0);
-	if(recvlen <= 0)
-		sys_err("tcp recv failed: %s\n", strerror(errno));
+	while(1) {
+		len = recv(tcp->sock, data, size, 0);
+		if(len > 0) {
+			data += len;
+			size -= len;
+			recvlen += len;
+			continue;
+		} else if(len <= 0) {
+			if(errno == EINTR)
+				continue;
+			if(errno == EAGAIN)
+				break;
+			sys_err("tcp recv failed: %s(%d)\n", 
+				strerror(errno), errno);
+			break;
+		}
+	}
+
 	return recvlen;
 }
 
@@ -123,10 +135,17 @@ int tcp_sendpkt(struct nettcp_t *tcp, char *data, int size)
 	if(tcp->sock == -1) return -1;
 
 	int sdrlen;
-	/* tcp close_wait will cause SIGPIPE */
-	sdrlen = send(tcp->sock, data, size, 0);
-	if(sdrlen <= 0)
-		sys_err("tcp send failed: %s\n", strerror(errno));
+	while(1) {
+		sdrlen = send(tcp->sock, data, size, 0);
+		if(sdrlen <= 0) {
+			if(errno == EAGAIN || errno == EINTR)
+				continue;
+			sys_err("tcp send failed: %s(%d)\n", 
+				strerror(errno), errno);
+			break;
+		}
+	}
+
 	return sdrlen;
 }
 
@@ -179,6 +198,26 @@ int tcp_listen(struct nettcp_t *tcp)
 	return tcp->sock;
 }
 
+static int _sock_nonblock(int socket)
+{
+	int flags;
+
+	flags = fcntl(socket, F_GETFL, 0);
+	if(flags < 0) {
+		sys_err("Get socket flags failed: %s(%d)\n", 
+			strerror(errno), errno);
+		return -1;
+	}
+
+	if(fcntl(socket, F_SETFL, flags | O_NONBLOCK) < 0) {
+		sys_err("Set socket flags failed: %s(%d)\n", 
+			strerror(errno), errno);
+		return -1;
+	}
+
+	return 0;
+}
+
 int tcp_accept(struct nettcp_t *tcp, void *func(void *))
 {
 	int clisock;
@@ -189,9 +228,11 @@ int tcp_accept(struct nettcp_t *tcp, void *func(void *))
 		return -1;
 	}
 
+	if(_sock_nonblock(clisock) < 0)
+		return -1;
+
 	sys_debug("New client:%d\n", clisock);
-#pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
-	__insert_sockarr(clisock, func, (void *)clisock);
+	insert_sockarr(clisock, func, NULL);
 	return clisock;
 }
 #endif

@@ -90,7 +90,7 @@ void net_init()
 {
 	int sock;
 	dll_init(&argument.nic[0], &sock, NULL, NULL);
-	__insert_sockarr(sock, __net_dllrecv, NULL);
+	insert_sockarr(sock, __net_dllrecv, NULL);
 
 	/* create pthread recv msg */
 	__create_pthread(net_recv, head);

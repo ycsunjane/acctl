@@ -21,6 +21,6 @@
 
 extern char 	acuuid[UUID_LEN];
 void msg_init();
-void ap_lost(struct nettcp_t *tcp, int lock);
+void ap_lost(int sock);
 void msg_proc(struct ap_hash_t *aphash, struct msg_head_t *msg);
 #endif /* __PROCESS_H__ */

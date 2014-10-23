@@ -95,42 +95,51 @@ err:
 }
 
 /* pthread recv netlayer */
-static void *__net_netrcv(void *arg)
+static void *__net_netrcv(void *ptr)
 {
+	struct sockarr_t *sockarr = ptr;
+	unsigned int events = sockarr->ev.events;
+	int clisock = sockarr->sock;
+
+	if(events & EPOLLRDHUP ||
+		events & EPOLLERR ||
+		events & EPOLLHUP) {
+		ap_lost(clisock);
+		return NULL;
+	}
+
+	if(!(events & EPOLLIN)) {
+		sys_warn("Epoll unknow events: %u\n", events);
+		return NULL;
+	}
+
 #pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-	int clisock = (int)arg;
 
 	struct message_t *msg;
-	int rcvlen;
-	struct ethhdr *hdr;
-	char *mac;
-	struct ap_t *ap;
-	struct ap_hash_t *aphash;
-	struct nettcp_t tcp;
-	tcp.sock = clisock;
-
 	msg = malloc(sizeof(struct message_t) + NET_PKT_DATALEN);
 	if(msg == NULL) {
-		sys_warn("malloc memory for dllayer failed: %s\n", 
-			strerror(errno));
+		sys_warn("Malloc memory for message failed: %s(%d)\n", 
+			strerror(errno), errno);
 		goto err;
 	}
 
-	rcvlen = tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
-	if(rcvlen <= 0) {
-		ap_lost(&tcp, 0);
-		free(msg);
-		goto err;
-	}
+	struct nettcp_t tcp;
+	tcp.sock = clisock;
+	tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
 
+	struct ethhdr *hdr;
+	char *mac;
 	hdr = (struct ethhdr *)&msg->data[0];
 	mac = (char *)&hdr->h_source[0];
+
+	struct ap_hash_t *aphash;
 	aphash = hash_ap(mac);
 	if(aphash == NULL) {
 		free(msg);
 		goto err;
 	}
 
+	struct ap_t *ap;
 	ap = &aphash->ap;
 	ap->timestamp = time(NULL);
 	ap->sock = clisock;
@@ -164,8 +173,12 @@ void net_init()
 {
 	int sock;
 
+	/* init epoll */
+	net_epoll_init();
+
+	/* init datalink layer */
 	dll_init(&argument.nic[0], &sock, NULL, NULL);
-	__insert_sockarr(sock, __net_dllrecv, NULL);
+	insert_sockarr(sock, __net_dllrecv, NULL);
 
 	/* create pthread recv msg */
 	__create_pthread(net_recv, NULL);

@@ -72,6 +72,7 @@ clean:
 	@rm -rf `find . -name "*.o"` $(ACDIR)/acser $(APDIR)/apctl
 	@rm -rf `find . -name "*.so"` 
 	@rm -rf $(TESTDIR)/dllser $(TESTDIR)/dllcli
+	@rm -rf cscope* tags
 FORCE:          
 	                
 PHONY += deps clean FORCE
