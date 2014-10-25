@@ -26,29 +26,23 @@
 
 #include "dllayer.h"
 #include "log.h"
+#include "msg.h"
 
-#ifndef MAX_AP
-#define MAX_AP 		(1ul << 14)
+/* 
+ * statistical information
+ */
+/* all ap in net, not reg counter */
+extern unsigned int ap_innet_cnt;
+/* all ap in reg */
+extern unsigned int ap_reg_cnt;
+
+
+extern struct ap_hash_head_t *aphead;
+extern unsigned int conflict_count;
+#ifndef MAX_BUCKET
+#define MAX_BUCKET 		(1ul << 14)
 #endif
-#define IDLE_AP 	(MAX_AP + 1)
-
-enum {
-	ETH,
-	TCP,
-};
-
-/* ap status */
-struct ap_status_t {
-};
-
-struct ap_t {
-	int 			isreg;
-	int 			sock;
-	struct sockaddr_in 	addr;
-	char 			mac[ETH_ALEN];
-	time_t 			timestamp;
-	struct ap_status_t 	ap_status;
-};
+#define IDLE_AP 	(MAX_BUCKET + 1)
 
 /* message */
 struct message_t {
@@ -58,26 +52,46 @@ struct message_t {
 	char 			data[0];
 };
 
-/* ap hash table */
-struct ap_hash_t {
-	unsigned int 		key;
-	pthread_mutex_t 	lock; 
-	struct ap_t 		ap;
-	struct message_t 	*next;
-	struct message_t 	**ptail;
-	int 			count;
+struct ap_status_t {
+	int 			isreg;
+	/* set when ap reg in other ac */
+	char 			reguuid[UUID_LEN];
+
+	int 			level;
 };
 
-extern struct ap_hash_t *aphead;
-extern unsigned int conflict_count;
-/* all ap in net, not reg counter */
-unsigned int ap_innet_cnt;
-/* all ap in reg */
-unsigned int ap_reg_cnt;
+struct ap_t {
+	/* key and dllayer mac */
+	char 			mac[ETH_ALEN];
+
+	/* tcp sock */
+	int 			sock;
+	struct ap_status_t 	ap_status;
+};
+
+struct ap_hash_t {
+	int 			key;
+	struct ap_t 		ap;
+
+	pthread_mutex_t 	lock; 
+
+	struct message_t 	*next;
+	struct message_t 	**ptail;
+	time_t 			timestamp;
+	int 			count;
+
+	struct ap_hash_t 	*apnext;
+};
+
+/* ap hash table */
+struct ap_hash_head_t {
+	pthread_mutex_t 	lock; 
+	struct ap_hash_t 	aphash;
+};
 
 void hash_init();
 struct ap_hash_t *hash_ap(char *mac);
+
+void message_travel_init();
 void message_insert(struct ap_hash_t *aphash, struct message_t *msg);
-struct message_t *message_delete(struct ap_hash_t *aphash);
-void *message_travel(void *arg);
 #endif /* __APHASH_H__ */

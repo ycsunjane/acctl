@@ -79,7 +79,7 @@ void *message_travel(void *arg)
 		sleep(argument.msgitv);
 		if(head == NULL) continue;
 		while((msg = message_delete())) {
-			msg_proc((struct msg_head_t *)msg->data);
+			msg_proc((void *)msg->data, msg->proto);
 			message_free(msg);
 		}
 	}

@@ -19,6 +19,7 @@
 #define __LOG_H__
 #include <syslog.h>
 #include <pthread.h>
+#include <arpa/inet.h>
 
 #include "arg.h"
 
@@ -75,12 +76,16 @@ extern int debug;
 
 #ifdef DEBUG
 #define pr_ap(mac, uuid) 	__pr_ap(mac, uuid)
+#define pr_mac(mac) 		__pr_mac(mac)
+#define pr_ipv4(addr) 		__pr_ipv4(addr)
 #else
 #define pr_ap(mac, uuid) 	NULL
+#define pr_mac(mac) 		NULL
+#define pr_ipv4(addr) 		NULL
 #endif
 static void __pr_ap(char *mac, char *uuid)
 {
-	printf("%02x%02x%02x%02x%02x%02x reg in: %s\n",
+	printf("%02x:%02x:%02x:%02x:%02x:%02x reg in: %s\n",
 		(unsigned char) mac[0],
 		(unsigned char) mac[1],
 		(unsigned char) mac[2],
@@ -88,6 +93,24 @@ static void __pr_ap(char *mac, char *uuid)
 		(unsigned char) mac[4],
 		(unsigned char) mac[5],
 		uuid);
+}
+
+static void __pr_mac(char *mac)
+{
+	fprintf(stderr, "%02x:%02x:%02x:%02x:%02x:%02x\n",
+		(unsigned char) mac[0],
+		(unsigned char) mac[1],
+		(unsigned char) mac[2],
+		(unsigned char) mac[3],
+		(unsigned char) mac[4],
+		(unsigned char) mac[5]);
+}
+
+static void __pr_ipv4(struct sockaddr_in *addr) 
+{
+	char _buf[20];
+	inet_ntop(AF_INET, &addr->sin_addr, _buf, 19);
+	sys_debug("addr:%s, port:%d\n", _buf, ntohs(addr->sin_port));
 }
 
 #endif /* __LOG_H__ */

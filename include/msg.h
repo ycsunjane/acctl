@@ -23,12 +23,14 @@
 #define UUID_LEN 	(50)
 
 #define MSG_TYPE_START (1000)
+/* msg type */
 enum {
 	MSG_AC_BRD  = MSG_TYPE_START,
 	MSG_AC_CMD,
-	MSG_AC_TAKEOVER,
+	MSG_AC_REG_RESP,
 
 	MSG_AP_REG,
+	MAS_AP_ERR,
 	MSG_AP_RESP,
 	MSG_AP_STATUS,
 };
@@ -45,15 +47,22 @@ struct msg_head_t {
 struct msg_ac_brd_t {
 	struct msg_head_t header;
 	struct sockaddr_in ipv4;
-};
-
-struct msg_ap_reg_t {
-	struct msg_head_t header;
+	char  takeover[UUID_LEN];
 };
 
 struct msg_ac_cmd_t {
 	struct msg_head_t header;
 	char 	cmd[0];
+};
+
+struct msg_ac_reg_resp_t {
+	struct msg_head_t header;
+	struct sockaddr_in ipv4;
+};
+
+struct msg_ap_reg_t {
+	struct msg_head_t header;
+	struct sockaddr_in ipv4;
 };
 
 struct msg_ap_status_t {

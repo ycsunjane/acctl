@@ -26,6 +26,7 @@
 #include "aphash.h"
 #include "process.h"
 #include "netlayer.h"
+#include "resource.h"
 
 void ui()
 {
@@ -46,9 +47,15 @@ void ui()
 int main(int argc, char *argv[])
 {
 	proc_arg(argc, argv);
-
-	msg_init();
+	/* resource init */
+	resource_init();
+	/* set ac uuid */
+	acuuid_set();
+	/* init ap hash table */
 	hash_init();
+	/* start message travel thread */
+	message_travel_init();
+	/* start recv message */
 	net_init();
 
 	ui();

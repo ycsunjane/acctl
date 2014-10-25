@@ -48,7 +48,6 @@ static void __getmac(char *nic, char *mac)
 	close(sockfd);
 }
 
-#ifdef SERVER
 static  void __getaddr(char *nic, struct sockaddr_in *addr)
 {
 	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -64,7 +63,6 @@ static  void __getaddr(char *nic, struct sockaddr_in *addr)
 	memcpy(addr, &req.ifr_addr, sizeof(struct sockaddr_in));
 	close(sockfd);
 }
-#endif
 
 /* check argment */
 static void __check_arg()
@@ -75,11 +73,11 @@ static void __check_arg()
 		exit(-1);
 	}
 	__getmac(&argument.nic[0], &argument.mac[0]);
+	__getaddr(&argument.nic[0], &argument.addr);
 
 #ifdef SERVER
 	/* default ac broadcast interval */
 	argument.brditv = (argument.brditv == 0) ? 30 : argument.brditv;
-	__getaddr(&argument.nic[0], &argument.addr);
 	argument.port = (argument.port == 0) ? 7960 : argument.port;
 	argument.addr.sin_port = htons(argument.port);
 #endif

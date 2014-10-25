@@ -20,13 +20,16 @@
 #include <pthread.h>
 #include "msg.h"
 struct sysstat_t {
-	int isreg;
-	int islost;
 	char acuuid[UUID_LEN];
-	pthread_mutex_t lock;
+	int isreg;
+
+	int sock;
+	char dmac[ETH_ALEN];
+	struct sockaddr_in server;
 };
 
-void ac_lost(int lock);
+void ac_lost();
+void init_report();
 extern struct sysstat_t sysstat;
-void msg_proc(struct msg_head_t *msg);
+void msg_proc(struct msg_head_t *msg, int proto);
 #endif /* __PROCESS_H__ */

@@ -31,24 +31,16 @@
 
 void ui();
 
-static void sigpipe_callback(int signum)
-{
-	sys_warn("Lost tcp connect\n");
-	ac_lost(1);
-}
-
 int main(int argc, char *argv[])
 {
-	struct sigaction sig;
-	memset(&sig, 0, sizeof(sig));
-	sig.sa_handler = sigpipe_callback;
-	sigaction(SIGPIPE, &sig, NULL);
-
 	proc_arg(argc, argv);
+
 	/* create recv pthread */
 	net_init();
 	/* create message loop travel pthread */
 	message_init();
+	/* create report pthread */
+	init_report();
 
 	ui();
 	return 0;

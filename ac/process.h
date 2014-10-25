@@ -20,7 +20,8 @@
 #include <netlayer.h>
 
 extern char 	acuuid[UUID_LEN];
-void msg_init();
+void acuuid_set();
 void ap_lost(int sock);
-void msg_proc(struct ap_hash_t *aphash, struct msg_head_t *msg);
+void msg_proc(struct ap_hash_t *aphash, 
+	struct msg_head_t *msg, int proto);
 #endif /* __PROCESS_H__ */

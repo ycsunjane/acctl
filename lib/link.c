@@ -85,6 +85,30 @@ void * net_recv(void *arg)
 	return NULL;	
 }
 
+int net_send(int proto, int sock, char *dmac, char *msg, int size)
+{
+	switch(proto) {
+	case MSG_PROTO_ETH:
+		sys_debug("Send packet through datalink layer\n");
+		return dll_sendpkt(dmac, msg, size);
+		break;
+	case MSG_PROTO_TCP:
+		sys_debug("Send packet through net layer: %d\n", sock);
+		if(sock < 0) {
+			sys_err("Invalid socket\n");
+			return -1;
+		}
+		struct nettcp_t net;
+		net.sock = sock;
+		return tcp_sendpkt(&net, msg, size);
+		break;
+	default:
+		sys_err("Invalid protocol\n");
+		return -1;
+	}
+	return -1;
+}
+
 struct sockarr_t *
 insert_sockarr(int sock, void *(*func) (void *), void *arg)
 {

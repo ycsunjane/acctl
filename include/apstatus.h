@@ -17,7 +17,7 @@
  */
 #ifndef __APSTATUS_H__
 #define __APSTATUS_H__
-#define SSID_MAXLEN 	(200)
+#define SSID_MAXLEN 	(256)
 
 struct ssid_t {
 	char ssid[SSID_MAXLEN];

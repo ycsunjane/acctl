@@ -38,12 +38,6 @@
 static void *__net_dllrecv(void *arg)
 {
 	struct message_t *msg;
-	int rcvlen;
-	char *mac;
-	struct msg_head_t *head;
-	struct ap_t *ap;
-	struct ap_hash_t *aphash;
-
 	msg = malloc(sizeof(struct message_t) + DLL_PKT_DATALEN);
 	if(msg == NULL) {
 		sys_warn("malloc memory for dllayer failed: %s\n", 
@@ -51,26 +45,28 @@ static void *__net_dllrecv(void *arg)
 		goto err;
 	}
 
+	int rcvlen;
 	rcvlen = dll_rcv(msg->data, DLL_PKT_DATALEN);
 	if(rcvlen < (int)sizeof(struct ethhdr)) {
 		free(msg);
 		goto err;
 	}
 
+	char *mac;
+	struct msg_head_t *head;
 	head = (struct msg_head_t *)(msg->data);
 	mac = &head->mac[0];
+
+	struct ap_hash_t *aphash;
 	aphash = hash_ap(mac);
 	if(aphash == NULL) {
 		free(msg);
 		goto err;
 	}
 
-	ap = &aphash->ap;
-	ap->timestamp = time(NULL);
-
-	msg->proto = TCP; 
+	memcpy(aphash->ap.mac, mac, ETH_ALEN);
+	msg->proto = MSG_PROTO_ETH; 
 	message_insert(aphash, msg);
-
 err:
 	return NULL;
 }
@@ -94,8 +90,6 @@ static void *__net_netrcv(void *ptr)
 		return NULL;
 	}
 
-#pragma GCC diagnostic ignored "-Wpointer-to-int-cast"
-
 	struct message_t *msg;
 	msg = malloc(sizeof(struct message_t) + NET_PKT_DATALEN);
 	if(msg == NULL) {
@@ -108,10 +102,10 @@ static void *__net_netrcv(void *ptr)
 	tcp.sock = clisock;
 	tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
 
-	struct ethhdr *hdr;
 	char *mac;
-	hdr = (struct ethhdr *)&msg->data[0];
-	mac = (char *)&hdr->h_source[0];
+	struct msg_head_t *head;
+	head = (struct msg_head_t *)(msg->data);
+	mac = &head->mac[0];
 
 	struct ap_hash_t *aphash;
 	aphash = hash_ap(mac);
@@ -120,12 +114,8 @@ static void *__net_netrcv(void *ptr)
 		goto err;
 	}
 
-	struct ap_t *ap;
-	ap = &aphash->ap;
-	ap->timestamp = time(NULL);
-	ap->sock = clisock;
-
-	msg->proto = ETH;
+	aphash->ap.sock = clisock;
+	msg->proto = MSG_PROTO_TCP;
 	message_insert(aphash, msg);
 err:
 	return NULL;
@@ -136,6 +126,12 @@ static void *net_dllbrd(void *arg)
 {
 	struct msg_ac_brd_t *reqbuf = 
 		malloc(sizeof(struct msg_ac_brd_t));
+	if(reqbuf == NULL) {
+		sys_err("Malloc broadcast message failed: %s(%d)\n",
+			strerror(errno), errno);
+		return NULL;
+	}
+
 	strncpy(reqbuf->header.acuuid, acuuid, UUID_LEN-1);
 	reqbuf->header.msg_type = MSG_AC_BRD;
 	memcpy(&reqbuf->header.mac[0], &argument.mac[0], ETH_ALEN);

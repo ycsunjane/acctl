@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <arpa/inet.h>
 #include <linux/if_ether.h>
 
 #include "net.h"
@@ -33,9 +34,9 @@
 #include "apstatus.h"
 #include "link.h"
 #include "process.h"
+#include "resource.h"
 
 char 	acuuid[UUID_LEN];
-
 static void __get_cmd_stdout(char *cmd, char *buf, int len)
 {
 	FILE *fp;
@@ -107,22 +108,37 @@ static void __ap_status(struct ap_t *ap, char *data)
 	free(msg);
 }
 
-static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg)
+static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg, int proto)
 {
-	pr_ap(&msg->header.mac[0], &msg->header.acuuid[0]);
+	struct _ip_t *ip;
+	struct sockaddr_in *addr;
+	if(res_ip_conflict(&(msg->ipv4), msg->header.mac))
+		addr = NULL;
+	else
+		addr = &(msg->ipv4);
+	pr_ipv4(addr);
 
-	if(ap->isreg) {
-		sys_warn("ap repeat register\n");
+	ip = res_ip_alloc(addr, msg->header.mac);
+
+	struct msg_ac_reg_resp_t *resp = 
+		calloc(1, sizeof(struct msg_ac_reg_resp_t));
+	if(resp == NULL) {
+		sys_err("Calloc memory failed: %s(%d)\n", 
+			strerror(errno), errno);
 		return;
 	}
 
-	ap->isreg = 1;
-	memcpy(&ap->mac[0], &msg->header.mac[0], ETH_ALEN);
+	__fill_msg_header((void *)resp, MSG_AC_REG_RESP);
+	if(ip != NULL)
+		resp->ipv4 = ip->ipv4;
+	net_send(proto, ap->sock, msg->header.mac, 
+		(void *)resp, sizeof(struct msg_ac_reg_resp_t));
+	free(resp);
 	ap_reg_cnt++;
 }
 
 #define X86_UUID 	"cat /sys/class/dmi/id/product_uuid"
-void msg_init()
+void acuuid_set()
 {
 	__get_cmd_stdout(X86_UUID, acuuid, UUID_LEN-1);
 	acuuid[UUID_LEN - 1] = 0;
@@ -130,23 +146,25 @@ void msg_init()
 
 void ap_lost(int sock)
 {
+	sys_debug("ap lost\n");
 	delete_sockarr(sock);
 }
 
-void msg_proc(struct ap_hash_t *aphash, struct msg_head_t *msg)
+void msg_proc(struct ap_hash_t *aphash, 
+	struct msg_head_t *msg, int proto)
 {
 	char *ap = msg->mac;
 
 	if(!__uuid_equ(msg->acuuid, acuuid) 
 		&& (msg->msg_type == MSG_AP_RESP)) {
-			/* net other ap */
-			pr_ap(ap, msg->acuuid);
-			return;
+		/* ap reg in other ac */
+		pr_ap(ap, msg->acuuid);
+		return;
 	}
 
 	switch(msg->msg_type) {
 	case MSG_AP_REG:
-		__ap_reg(&aphash->ap, (void *)msg);
+		__ap_reg(&aphash->ap, (void *)msg, proto);
 		break;
 	case MSG_AP_STATUS:
 		__ap_status(&aphash->ap, (void *)msg);

@@ -26,13 +26,12 @@ struct arg_t {
 #ifdef SERVER
 	int  	brditv;
 	int 	port;
-	struct sockaddr_in addr;
 #endif
 #ifdef CLIENT
 	int 	reportitv; 
 #endif
+	struct sockaddr_in addr;
 	int 	msgitv;
-	/* avoid gcc warning */
 	char 	nic[IFNAMSIZ];
 	char 	mac[ETH_ALEN];
 };

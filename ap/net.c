@@ -32,9 +32,8 @@
 #include "link.h"
 #include "process.h"
 
-struct nettcp_t tcp;
 /* recv dllayer */
-static void *__net_dllrecv(void *arg)
+static void *net_dllrecv(void *arg)
 {
 	struct message_t *msg;
 	int rcvlen;
@@ -52,7 +51,7 @@ static void *__net_dllrecv(void *arg)
 		free(msg);
 		goto err;
 	}
-	msg->proto = ETH;
+	msg->proto = MSG_PROTO_ETH;
 	message_insert(msg);
 err:
 	return NULL;
@@ -61,9 +60,18 @@ err:
 /* recv netlayer */
 void *__net_netrcv(void *arg)
 {
-	struct message_t *msg;
-	int rcvlen;
+	struct sockarr_t *sockarr = arg;
+	unsigned int events = sockarr->ev.events;
+	int clisock = sockarr->sock;
 
+	if(events & EPOLLRDHUP ||
+		events & EPOLLERR ||
+		events & EPOLLHUP) {
+		ac_lost();
+		return NULL;
+	}
+
+	struct message_t *msg;
 	msg = malloc(sizeof(struct message_t) + NET_PKT_DATALEN);
 	if(msg == NULL) {
 		sys_warn("malloc memory for dllayer failed: %s\n", 
@@ -71,17 +79,17 @@ void *__net_netrcv(void *arg)
 		goto err;
 	}
 
+	int rcvlen;
+	struct nettcp_t tcp;
+	tcp.sock = clisock;
 	rcvlen = tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
 	if(rcvlen <= 0) {
-		/* __net_netrcv in select lock, so no need lock anymore
-		 * can only delete own sockarr */
-		ac_lost(0);
+		ac_lost();
 		free(msg);
 		goto err;
 	}
-	msg->proto = TCP;
+	msg->proto = MSG_PROTO_TCP;
 	message_insert(msg);
-
 err:
 	return NULL;
 }
@@ -89,8 +97,11 @@ err:
 void net_init()
 {
 	int sock;
+	/* init epoll */
+	net_epoll_init();
+
 	dll_init(&argument.nic[0], &sock, NULL, NULL);
-	insert_sockarr(sock, __net_dllrecv, NULL);
+	insert_sockarr(sock, net_dllrecv, NULL);
 
 	/* create pthread recv msg */
 	__create_pthread(net_recv, head);
