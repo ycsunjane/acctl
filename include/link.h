@@ -18,6 +18,7 @@
 #ifndef __LINK_H__
 #define __LINK_H__
 #include <sys/epoll.h>
+#include <stdint.h>
 #include "dllayer.h"
 #include "netlayer.h"
 
@@ -30,8 +31,10 @@ struct sockarr_t {
 	struct epoll_event ev;
 
 	int sock;
+	uint32_t retevents;
 	void *(*func) (void *);
 	void *arg;
+
 	struct sockarr_t *next;
 };
 

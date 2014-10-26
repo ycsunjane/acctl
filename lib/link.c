@@ -79,6 +79,7 @@ void * net_recv(void *arg)
 
 		for(i = 0; i < ret; i++) {
 			sockarr = epollarr[i].data.ptr;
+			sockarr->retevents = epollarr[i].events;
 			sockarr->func(sockarr);
 		}
 	}

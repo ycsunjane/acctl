@@ -61,12 +61,13 @@ err:
 void *__net_netrcv(void *arg)
 {
 	struct sockarr_t *sockarr = arg;
-	unsigned int events = sockarr->ev.events;
+	unsigned int events = sockarr->retevents;
 	int clisock = sockarr->sock;
 
 	if(events & EPOLLRDHUP ||
 		events & EPOLLERR ||
 		events & EPOLLHUP) {
+		sys_debug("Epool get err: %s(%d)\n", strerror(errno), errno);
 		ac_lost();
 		return NULL;
 	}

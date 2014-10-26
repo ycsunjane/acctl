@@ -72,15 +72,16 @@ err:
 }
 
 /* pthread recv netlayer */
-static void *__net_netrcv(void *ptr)
+static void *__net_netrcv(void *arg)
 {
-	struct sockarr_t *sockarr = ptr;
-	unsigned int events = sockarr->ev.events;
+	struct sockarr_t *sockarr = arg;
+	unsigned int events = sockarr->retevents;
 	int clisock = sockarr->sock;
 
 	if(events & EPOLLRDHUP ||
 		events & EPOLLERR ||
 		events & EPOLLHUP) {
+		sys_debug("Epool get err: %s(%d)\n", strerror(errno), errno);
 		ap_lost(clisock);
 		return NULL;
 	}
