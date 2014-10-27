@@ -83,6 +83,7 @@ static void __check_arg()
 #endif
 #ifdef CLIENT
 	argument.reportitv = (argument.reportitv == 0) ? 30 : argument.reportitv;
+	argument.msgitv = (argument.msgitv == 0) ? 30 : argument.msgitv;
 #endif
 }
 

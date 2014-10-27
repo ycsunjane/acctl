@@ -32,7 +32,6 @@ struct message_t {
 	char 			data[0];
 };
 
-extern int message_num;
 extern struct message_t *head, **tail;
 
 void message_init();

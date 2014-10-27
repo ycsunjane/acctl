@@ -26,6 +26,7 @@
 #include <sys/time.h>
 #include <sys/epoll.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "log.h"
 #include "link.h"
@@ -47,6 +48,25 @@ do { 						\
 
 int epl;
 
+static int net_nonblock(int socket)
+{
+	int flags;
+
+	flags = fcntl(socket, F_GETFL, 0);
+	if(flags < 0) {
+		sys_err("Get socket flags failed: %s(%d)\n", 
+			strerror(errno), errno);
+		return -1;
+	}
+
+	if(fcntl(socket, F_SETFL, flags | O_NONBLOCK) < 0) {
+		sys_err("Set socket flags failed: %s(%d)\n", 
+			strerror(errno), errno);
+		return -1;
+	}
+
+	return 0;
+}
 void net_epoll_init()
 {
 	epl = epoll_create1(EPOLL_CLOEXEC);
@@ -80,6 +100,17 @@ void * net_recv(void *arg)
 		for(i = 0; i < ret; i++) {
 			sockarr = epollarr[i].data.ptr;
 			sockarr->retevents = epollarr[i].events;
+			if(epollarr[i].events & EPOLLRDHUP) {
+				sys_debug("Epool get err: %s %s(%d)\n",
+					"EPOLLRDHUP", strerror(errno), errno);
+			} else if(epollarr[i].events & EPOLLERR) {
+				sys_debug("Epool get err: %s %s(%d)\n",
+					"EPOLLERR", strerror(errno), errno);
+			} else if(epollarr[i].events & EPOLLHUP) {
+				sys_debug("Epool get err: %s %s(%d)\n",
+					"EPOLLHUP", strerror(errno), errno);
+			}
+
 			sockarr->func(sockarr);
 		}
 	}
@@ -92,17 +123,17 @@ int net_send(int proto, int sock, char *dmac, char *msg, int size)
 	case MSG_PROTO_ETH:
 		sys_debug("Send packet through datalink layer\n");
 		return dll_sendpkt(dmac, msg, size);
-		break;
 	case MSG_PROTO_TCP:
-		sys_debug("Send packet through net layer: %d\n", sock);
 		if(sock < 0) {
-			sys_err("Invalid socket\n");
+			sys_err("Invalid socket: %d\n", sock);
 			return -1;
 		}
+
+		sys_debug("Send packet through net layer, sock: %d, msg: %p, size: %d\n", 
+			sock, msg, size);
 		struct nettcp_t net;
 		net.sock = sock;
 		return tcp_sendpkt(&net, msg, size);
-		break;
 	default:
 		sys_err("Invalid protocol\n");
 		return -1;
@@ -113,12 +144,17 @@ int net_send(int proto, int sock, char *dmac, char *msg, int size)
 struct sockarr_t *
 insert_sockarr(int sock, void *(*func) (void *), void *arg)
 {
+
+	int ret;
+	ret = net_nonblock(sock);
+	if(ret < 0)
+		return NULL;
+
 	struct sockarr_t *__sock = malloc(sizeof(struct sockarr_t));
 	if(__sock == NULL) {
 		sys_err("Malloc sockarr failed: %s\n", strerror(errno));
 		exit(-1);
 	}
-
 	__sock->ev.events = EPOLLIN | EPOLLRDHUP | EPOLLET;
 	__sock->ev.data.ptr = __sock;
 	__sock->sock = sock;
@@ -127,7 +163,6 @@ insert_sockarr(int sock, void *(*func) (void *), void *arg)
 	__sock->next = NULL;
 
 	/* add in epoll */
-	int ret;
 	ret = epoll_ctl(epl, EPOLL_CTL_ADD, 
 		__sock->sock, &__sock->ev);
 	if(ret < 0) {
@@ -153,6 +188,7 @@ int delete_sockarr(int sock)
 	cur = __head;
 	ppre = &__head;
 
+	int ret;
 	while(cur) {
 		if(cur->sock == sock) {
 			*ppre = cur->next;
@@ -160,6 +196,10 @@ int delete_sockarr(int sock)
 				__tail = ppre;
 			SOCKARR_UNLOCK();
 
+			ret = epoll_ctl(epl, EPOLL_CTL_DEL, sock, NULL);
+			if(ret < 0)
+				sys_err("Delete epoll sock: %d failed: %s(%d)\n", 
+					sock, strerror(errno), errno);
 			close(sock);
 			free(cur);
 			return 0;

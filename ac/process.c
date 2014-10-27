@@ -81,6 +81,7 @@ static char *__buildcmd()
 
 static void __ap_status(struct ap_t *ap, char *data)
 {
+	sys_debug("recive ap report status packet\n");
 	int ret;
 	struct apstatus_t *status = (void *)(data + sizeof(struct msg_ap_status_t));
 	printf("ssidnum:%d, ssid:%s \n", status->ssidnum, status->ssid0.ssid);
@@ -110,6 +111,7 @@ static void __ap_status(struct ap_t *ap, char *data)
 
 static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg, int proto)
 {
+	sys_debug("recive ap reg packet\n");
 	struct _ip_t *ip;
 	struct sockaddr_in *addr;
 	if(res_ip_conflict(&(msg->ipv4), msg->header.mac))
@@ -129,8 +131,9 @@ static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg, int proto)
 	}
 
 	__fill_msg_header((void *)resp, MSG_AC_REG_RESP);
+	resp->acaddr = argument.addr;
 	if(ip != NULL)
-		resp->ipv4 = ip->ipv4;
+		resp->apaddr = ip->ipv4;
 	net_send(proto, ap->sock, msg->header.mac, 
 		(void *)resp, sizeof(struct msg_ac_reg_resp_t));
 	free(resp);
@@ -146,7 +149,7 @@ void acuuid_set()
 
 void ap_lost(int sock)
 {
-	sys_debug("ap lost\n");
+	sys_debug("ap lost sock: %d\n", sock);
 	delete_sockarr(sock);
 }
 

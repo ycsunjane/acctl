@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 #include <linux/if_ether.h>
 
 #include "message.h"

@@ -109,8 +109,7 @@ new:
 	ap_innet_cnt++;
 ret:
 	pthread_mutex_unlock(&head->lock);
-	pure_info("key: %d, aphash: %p\n", key, aphash);
-	pr_mac(mac);
+	pr_hash(key, aphash, mac);
 	return aphash;
 }
 
@@ -125,7 +124,7 @@ void hash_init()
 			strerror(errno));
 		exit(-1);
 	}
-	pure_info("Max support ap: %lu\n", MAX_BUCKET);
+	sys_debug("Max support ap: %lu\n", MAX_BUCKET);
 
 	int i;
 	for(i = 0; i < MAX_BUCKET; i++) {
@@ -140,10 +139,10 @@ void hash_init()
 void message_insert(struct ap_hash_t *aphash, struct message_t *msg)
 {
 	assert(aphash != NULL);
-	sys_debug("aphash: %p\n", aphash);
 
 	msg->next = NULL;
 
+	sys_debug("message insert aphash: %p, msg: %p\n", aphash, msg);
 	pthread_mutex_lock(&aphash->lock);
 	*(aphash->ptail) = msg;
 	aphash->ptail = &msg->next; 
@@ -156,7 +155,7 @@ static struct message_t *message_delete(struct ap_hash_t *aphash)
 	if(aphash->next == NULL)
 		return NULL;
 
-	sys_debug("aphash: %p\n", aphash);
+	sys_debug("message delete aphash: %p\n", aphash);
 	struct message_t *msg;
 
 	pthread_mutex_lock(&aphash->lock);

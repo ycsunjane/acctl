@@ -29,15 +29,16 @@
 #include "message.h"
 #include "process.h"
 
-int message_num = 0;
 struct message_t *head = NULL;
 struct message_t **tail = &head;
 pthread_mutex_t message_lock = PTHREAD_MUTEX_INITIALIZER;
 #define MUTEX_LOCK(lock)  pthread_mutex_lock(&lock)
 #define MUTEX_UNLOCK(lock)  pthread_mutex_unlock(&lock)
 
+static int message_num = 0;
 void message_insert(struct message_t *msg)
 {
+	sys_debug("message insert msg: %p\n", msg);
 	msg->next = NULL;
 
 	MUTEX_LOCK(message_lock);
@@ -49,6 +50,7 @@ void message_insert(struct message_t *msg)
 
 struct message_t * message_delete()
 {
+	sys_debug("message delete\n");
 	MUTEX_LOCK(message_lock);
 	if(message_num == 0) {
 		assert(*tail == head);
@@ -82,6 +84,8 @@ void *message_travel(void *arg)
 			msg_proc((void *)msg->data, msg->proto);
 			message_free(msg);
 		}
+		sys_debug("Message travel pthreads (next %d second later)\n", 
+			argument.msgitv);
 	}
 	return NULL;
 }

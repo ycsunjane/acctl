@@ -76,6 +76,8 @@ static int __tcp_alive(struct nettcp_t *tcp)
 int tcp_connect(struct nettcp_t *tcp)
 {
 	int ret;
+	if(tcp->addr.sin_addr.s_addr == 0)
+		return -1;
 
 	tcp->sock = socket(AF_INET, SOCK_STREAM, 0);
 	if(tcp->sock < 0) {
@@ -83,6 +85,7 @@ int tcp_connect(struct nettcp_t *tcp)
 			strerror(errno));
 		return -1;
 	}
+
 	ret = __tcp_alive(tcp);
 	if(ret < 0) {
 		sys_err("Set tcp alive failed\n");
@@ -114,17 +117,19 @@ int tcp_rcv(struct nettcp_t *tcp, char *data, int size)
 			size -= len;
 			recvlen += len;
 			continue;
-		} else if(len <= 0) {
+		} else if(len < 0) {
 			if(errno == EINTR)
 				continue;
 			if(errno == EAGAIN)
 				break;
-			sys_err("tcp recv failed: %s(%d)\n", 
-				strerror(errno), errno);
+			sys_err("sock: %d, tcp recv failed: %s(%d)\n", 
+				tcp->sock, strerror(errno), errno);
 			break;
 		}
+		assert(len != 0);
 	}
 
+	sys_debug("Recv msg from sock: %d, size: %d\n", tcp->sock, recvlen);
 	return recvlen;
 }
 
@@ -137,15 +142,16 @@ int tcp_sendpkt(struct nettcp_t *tcp, char *data, int size)
 	int sdrlen;
 	while(1) {
 		sdrlen = send(tcp->sock, data, size, 0);
-		if(sdrlen <= 0) {
+		if(sdrlen < 0) {
 			if(errno == EAGAIN || errno == EINTR)
 				continue;
-			sys_err("tcp send failed: %s(%d)\n", 
-				strerror(errno), errno);
-			break;
+			sys_err("sock: %d, tcp send failed: %s(%d)\n", 
+				tcp->sock, strerror(errno), errno);
 		}
+		break;
 	}
 
+	sys_debug("Send packet success: %d\n", sdrlen);
 	return sdrlen;
 }
 
@@ -198,25 +204,7 @@ int tcp_listen(struct nettcp_t *tcp)
 	return tcp->sock;
 }
 
-static int _sock_nonblock(int socket)
-{
-	int flags;
 
-	flags = fcntl(socket, F_GETFL, 0);
-	if(flags < 0) {
-		sys_err("Get socket flags failed: %s(%d)\n", 
-			strerror(errno), errno);
-		return -1;
-	}
-
-	if(fcntl(socket, F_SETFL, flags | O_NONBLOCK) < 0) {
-		sys_err("Set socket flags failed: %s(%d)\n", 
-			strerror(errno), errno);
-		return -1;
-	}
-
-	return 0;
-}
 
 int tcp_accept(struct nettcp_t *tcp, void *func(void *))
 {
@@ -227,9 +215,6 @@ int tcp_accept(struct nettcp_t *tcp, void *func(void *))
 			strerror(errno));
 		return -1;
 	}
-
-	if(_sock_nonblock(clisock) < 0)
-		return -1;
 
 	sys_debug("New client:%d\n", clisock);
 	insert_sockarr(clisock, func, NULL);

@@ -46,7 +46,6 @@ struct msg_head_t {
 
 struct msg_ac_brd_t {
 	struct msg_head_t header;
-	struct sockaddr_in ipv4;
 	char  takeover[UUID_LEN];
 };
 
@@ -57,7 +56,8 @@ struct msg_ac_cmd_t {
 
 struct msg_ac_reg_resp_t {
 	struct msg_head_t header;
-	struct sockaddr_in ipv4;
+	struct sockaddr_in acaddr;
+	struct sockaddr_in apaddr;
 };
 
 struct msg_ap_reg_t {

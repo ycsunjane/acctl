@@ -52,6 +52,7 @@ static void *__net_dllrecv(void *arg)
 		goto err;
 	}
 
+	sys_debug("datalink layer recive a packet\n");
 	char *mac;
 	struct msg_head_t *head;
 	head = (struct msg_head_t *)(msg->data);
@@ -99,9 +100,16 @@ static void *__net_netrcv(void *arg)
 		goto err;
 	}
 
+	sys_debug("net layer recive a packet\n");
 	struct nettcp_t tcp;
 	tcp.sock = clisock;
-	tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
+	int rcvlen;
+	rcvlen = tcp_rcv(&tcp, msg->data, NET_PKT_DATALEN);
+	if(rcvlen <= 0) {
+		ap_lost(clisock);
+		free(msg);
+		goto err;
+	}
 
 	char *mac;
 	struct msg_head_t *head;
@@ -136,7 +144,6 @@ static void *net_dllbrd(void *arg)
 	strncpy(reqbuf->header.acuuid, acuuid, UUID_LEN-1);
 	reqbuf->header.msg_type = MSG_AC_BRD;
 	memcpy(&reqbuf->header.mac[0], &argument.mac[0], ETH_ALEN);
-	reqbuf->ipv4 = argument.addr;
 
 	while(1) {
 		sys_debug("Send a broadcast probe msg (next %d second later)\n", 
@@ -160,10 +167,8 @@ static void *net_netlisten(void *arg)
 		exit(-1);
 	}
 
-	while(1) {
+	while(1)
 		tcp_accept(&tcplisten, __net_netrcv);
-		sys_debug("accept connect\n");
-	}
 }
 
 void net_init()

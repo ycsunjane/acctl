@@ -59,9 +59,9 @@ static void ac_reconnect()
 	struct nettcp_t tcp;
 	tcp.addr = sysstat.server;
 	ret = tcp_connect(&tcp);
-	if(ret < 0)
-		return;
+	if(ret < 0) return;
 
+	pr_ipv4(&tcp.addr);
 	sysstat.sock = ret;
 	insert_sockarr(tcp.sock, __net_netrcv, NULL);
 }
@@ -112,36 +112,6 @@ static int __uuid_equ(char *src, char *dest)
 	return !strncmp(src, dest, UUID_LEN - 1);
 }
 
-static void _proc_brd_isreg(struct msg_ac_brd_t *msg, int proto)
-{
-	if(__uuid_equ(&msg->header.acuuid[0], &sysstat.acuuid[0])) {
-		memcpy(sysstat.dmac, msg->header.mac, ETH_ALEN);
-		if(sysstat.sock < 0)
-			sysstat.server = msg->ipv4;
-	} else {
-		if(__uuid_equ(&msg->takeover[0], &sysstat.acuuid[0])) {
-			memcpy(&sysstat.acuuid[0], &msg->takeover[0], ETH_ALEN);
-			sysstat.server = msg->ipv4;
-			if(sysstat.sock >= 0) {
-				close(sysstat.sock);
-				sysstat.sock = -1;
-			}
-		} else {
-			struct msg_ap_resp_t *data = 
-				malloc(sizeof(struct msg_ap_resp_t));
-			if(data == NULL) {
-				sys_warn("Malloc for response failed:%s\n", 
-					strerror(errno));
-				return;
-			}
-			__fill_msg_header(data, MSG_AP_RESP);
-			net_send(proto, -1, &sysstat.dmac[0], 
-				(void *)data, sizeof(struct msg_ap_resp_t));
-			free(data);
-		}
-	}
-}
-
 static void _proc_brd(struct msg_ac_brd_t *msg, int proto)
 {
 	/* send current ipv4 */
@@ -159,6 +129,31 @@ static void _proc_brd(struct msg_ac_brd_t *msg, int proto)
 	free(data);
 }
 
+static void _proc_brd_isreg(struct msg_ac_brd_t *msg, int proto)
+{
+	if(!__uuid_equ(&msg->header.acuuid[0], &sysstat.acuuid[0])) {
+		if(__uuid_equ(&msg->takeover[0], &sysstat.acuuid[0])) {
+			if(sysstat.sock >= 0) {
+				close(sysstat.sock);
+				sysstat.sock = -1;
+			}
+			_proc_brd(msg, proto);
+		} else {
+			struct msg_ap_resp_t *data = 
+				malloc(sizeof(struct msg_ap_resp_t));
+			if(data == NULL) {
+				sys_warn("Malloc for response failed:%s\n", 
+					strerror(errno));
+				return;
+			}
+			__fill_msg_header(data, MSG_AP_RESP);
+			net_send(proto, -1, &sysstat.dmac[0], 
+				(void *)data, sizeof(struct msg_ap_resp_t));
+			free(data);
+		}
+	}
+}
+
 /*
  * reponse_brd recv broadcast msg from ac and update sysstat
  * */
@@ -166,6 +161,7 @@ static void proc_brd(struct msg_ac_brd_t *msg, int proto)
 {
 	assert(proto == MSG_PROTO_ETH);
 
+	sys_debug("receive ac broadcast packet\n");
 	if(sysstat.isreg)
 		_proc_brd_isreg(msg, proto);
 	else
@@ -199,32 +195,37 @@ static int setaddr(struct sockaddr *addr)
 
 static void proc_reg_resp(struct msg_ac_reg_resp_t *msg, int proto)
 {
+	sys_debug("Recive ac reg response packet\n");
 	strncpy(sysstat.acuuid, msg->header.acuuid, UUID_LEN);
 	memcpy(sysstat.dmac, msg->header.mac, ETH_ALEN);
-	sysstat.server = msg->ipv4;
-	pr_ipv4(&msg->ipv4);
+	sysstat.server = msg->acaddr;
+	pr_ipv4(&msg->acaddr);
+	pr_ipv4(&msg->apaddr);
+
+	if(msg->apaddr.sin_addr.s_addr) 
+		setaddr((void *)&msg->apaddr);
 
 	int ret;
-	if(msg->ipv4.sin_addr.s_addr && setaddr((void *)&msg->ipv4)) {
-		struct nettcp_t tcp;
-		if(sysstat.server.sin_addr.s_addr != 0) {
-			tcp.addr = sysstat.server;
-			ret = tcp_connect(&tcp);
-			if(ret < 0) {
-				sys_warn("Connect ac failed: %s\n",
-					strerror(errno));
-				return;
-			}
+	struct nettcp_t tcp;
+	if(sysstat.server.sin_addr.s_addr != 0) {
+		tcp.addr = sysstat.server;
+		ret = tcp_connect(&tcp);
+		if(ret < 0) {
+			sys_warn("Connect ac failed: %s\n",
+				strerror(errno));
+			return;
 		}
-		sysstat.sock = ret;
-		insert_sockarr(sysstat.sock, __net_netrcv, NULL);
 	}
 
+	sys_debug("Connect ac success\n");
+	sysstat.sock = ret;
+	insert_sockarr(sysstat.sock, __net_netrcv, NULL);
 	sysstat.isreg = 1;
 }
 
 static void __exec_cmd(struct msg_ac_cmd_t *cmd)
 {
+	sys_debug("receive ac command packet\n");
 	printf("cmd: %s\n", cmd->cmd);
 }
 
@@ -233,7 +234,7 @@ static int is_mine(struct msg_head_t *msg)
 	if(!sysstat.isreg) {
 		return 1;
 	} else if(strncmp(msg->acuuid, sysstat.acuuid, UUID_LEN)) {
-		sys_warn("recive invalid packet\n");
+		sys_warn("receive invalid packet\n");
 		return 0;
 	} else {
 		return 1;

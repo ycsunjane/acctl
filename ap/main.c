@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <signal.h>
+#include <unistd.h>
 
 #include "arg.h"
 #include "message.h"
@@ -42,22 +43,6 @@ int main(int argc, char *argv[])
 	/* create report pthread */
 	init_report();
 
-	ui();
+	pause();
 	return 0;
-}
-
-void ui()
-{
-	printf("1 system status\n");
-
-	int num;
-	while(1) {
-		printf("Input num: ");
-		scanf("%d", &num);
-
-		switch(num) {
-		case 1: {
-			}
-		}
-	}
 }
