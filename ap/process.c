@@ -34,11 +34,15 @@
 #include "process.h"
 #include "apstatus.h"
 
+#define SYSSTAT_LOCK() 	(pthread_mutex_lock(&sysstat.lock))
+#define SYSSTAT_UNLOCK() (pthread_mutex_unlock(&sysstat.lock))
+
 struct sysstat_t sysstat = {
 	.acuuid = {0},
 	.isreg = 0,
 	.sock = -1,
 	.dmac = {0},
+	.lock = PTHREAD_MUTEX_INITIALIZER,
 };
 
 static void __fill_msg_header(struct msg_head_t *msg, int msgtype)
@@ -52,18 +56,31 @@ static void __fill_msg_header(struct msg_head_t *msg, int msgtype)
 
 static void ac_reconnect()
 {
-	if(!sysstat.isreg)
+	if(!sysstat.server.sin_addr.s_addr)
 		return;
 
 	int ret;
 	struct nettcp_t tcp;
+	SYSSTAT_LOCK();
+	/* other process have reconnect */
+	if(sysstat.sock >= 0)
+		goto unlock;
+
 	tcp.addr = sysstat.server;
 	ret = tcp_connect(&tcp);
-	if(ret < 0) return;
+	if(ret < 0)
+		goto unlock;
 
 	pr_ipv4(&tcp.addr);
 	sysstat.sock = ret;
+	SYSSTAT_UNLOCK();
+	sys_debug("connect success: %d\n", sysstat.sock);
 	insert_sockarr(tcp.sock, __net_netrcv, NULL);
+	return;
+
+unlock:
+	SYSSTAT_UNLOCK();
+	return;
 }
 
 static void *report_apstatus(void *arg)
@@ -84,6 +101,8 @@ static void *report_apstatus(void *arg)
 	struct msg_ap_status_t *msg = (void *)buf;
 	__fill_msg_header(&msg->header, MSG_AP_STATUS);
 
+	/* ap will first connect remote ac, but if find local ac, ap will
+	 * connect to local ac */
 	while(1) {
 		proto = (sysstat.sock >= 0) ? MSG_PROTO_TCP : MSG_PROTO_ETH;
 		if(proto == MSG_PROTO_ETH) {
@@ -101,7 +120,8 @@ static void *report_apstatus(void *arg)
 			ac_reconnect();
 		}
 wait:
-		sys_debug("wait: %d\n", argument.reportitv);
+		sys_debug("report ap status (next %d seconds later)\n", 
+			argument.reportitv);
 		sleep(argument.reportitv);
 	}
 	return NULL;
@@ -198,28 +218,20 @@ static void proc_reg_resp(struct msg_ac_reg_resp_t *msg, int proto)
 	sys_debug("Recive ac reg response packet\n");
 	strncpy(sysstat.acuuid, msg->header.acuuid, UUID_LEN);
 	memcpy(sysstat.dmac, msg->header.mac, ETH_ALEN);
-	sysstat.server = msg->acaddr;
-	pr_ipv4(&msg->acaddr);
-	pr_ipv4(&msg->apaddr);
-
+	if(msg->acaddr.sin_addr.s_addr)
+		sysstat.server = msg->acaddr;
 	if(msg->apaddr.sin_addr.s_addr) 
 		setaddr((void *)&msg->apaddr);
 
-	int ret;
-	struct nettcp_t tcp;
-	if(sysstat.server.sin_addr.s_addr != 0) {
-		tcp.addr = sysstat.server;
-		ret = tcp_connect(&tcp);
-		if(ret < 0) {
-			sys_warn("Connect ac failed: %s\n",
-				strerror(errno));
-			return;
-		}
-	}
+	pr_ipv4(&msg->acaddr);
+	pr_ipv4(&msg->apaddr);
 
-	sys_debug("Connect ac success\n");
-	sysstat.sock = ret;
-	insert_sockarr(sysstat.sock, __net_netrcv, NULL);
+	/* if have connect to remote ac, close it. 
+	 * and connect to local ac */
+	if(sysstat.sock >= 0)
+		close(sysstat.sock);
+
+	ac_reconnect();
 	sysstat.isreg = 1;
 }
 
@@ -271,5 +283,7 @@ void ac_lost()
 
 void init_report()
 {
+	/* init remote ac address */
+	sysstat.server = argument.acaddr;
 	__create_pthread(report_apstatus, NULL);
 }

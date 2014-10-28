@@ -20,12 +20,15 @@
 #include <pthread.h>
 #include "msg.h"
 struct sysstat_t {
+	/* only used by local ac */
 	char acuuid[UUID_LEN];
+	char dmac[ETH_ALEN];
 	int isreg;
 
+	/* used by local ac and remote ac */
 	int sock;
-	char dmac[ETH_ALEN];
 	struct sockaddr_in server;
+	pthread_mutex_t lock;
 };
 
 void ac_lost();

@@ -22,13 +22,15 @@
 #include <net/if.h>
 #include <getopt.h>
 
+#define ACPORT 	(7960)
 struct arg_t {
+	int 	port;
 #ifdef SERVER
 	int  	brditv;
-	int 	port;
 #endif
 #ifdef CLIENT
 	int 	reportitv; 
+	struct  sockaddr_in acaddr;
 #endif
 	struct sockaddr_in addr;
 	int 	msgitv;

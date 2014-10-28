@@ -21,6 +21,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <netdb.h>
 
 #include "arg.h"
 #include "log.h"
@@ -29,24 +30,25 @@
 static struct option long_arg[] = {
 	{"nic", has_arg, 0, 'n'},
 	{"daemon", 0, 0, 'd'},
+	{"port", has_arg, 0, 'p'},
 #ifdef SERVER
 	{"brditv", has_arg, 0, 'b'},
-	{"port", has_arg, 0, 'p'},
 #endif
 #ifdef CLIENT
 	{"reportitv", has_arg, 0, 'r'},
+	{"domain", has_arg, 0, 'a'},
 #endif
 	{"msgitv", has_arg, 0, 'm'},
 	{"debug", has_arg, 0, 'l'},
-	{"help", 0, 0, '*'},
+	{"help", 0, 0, 'h'},
 	{0, 0, 0 , 0},
 };
 
 #ifdef SERVER
-#define SHORT_STR 	"n:db:p:m:l:"
+#define SHORT_STR 	"n:db:p:m:l:h"
 #endif
 #ifdef CLIENT
-#define SHORT_STR 	"n:dm:r:l:"
+#define SHORT_STR 	"n:dm:p:r:l:a:h"
 #endif
 #ifdef TEST
 #define SHORT_STR 	"n:dm:l:"
@@ -57,16 +59,17 @@ static char *help_array[] = {
 	"acctl server",
 	"  -n, --nic 		nic which controller [required]",
 	"  -d, --daemon 		daemon mode",
+	"  -p, --port 		ac listen port (default 7960)",
 #ifdef SERVER
 	"  -b, --brditv 	ac broadcast interval (default 30)",
-	"  -p, --port 		ac listen port (default 7960)",
 #endif
 #ifdef CLIENT
 	"  -r, --reportitv 	ap report status interval (default 30)",
+	"  -a, --domain 	remote ac address(e.g: www.baiud.com, localhost, 192.168.10.1), when no local ac, ap will connect to remote ac",
 #endif
 	"  -m, --msgitv  	interval travel all recevied message (default 30)",
-	"  -l, --debug 		enable debug (DEBUG = 1, WARN = 2, LOCK = 3, ALL = other), will auto disable daemon_mode",
-	"  --help 		help info",
+	"  --debug 		enable debug (DEBUG = 1, WARN = 2, LOCK = 3, ALL = other), will auto disable daemon_mode",
+	"  -h, --help 		help info",
 	NULL,
 };
 
@@ -83,12 +86,6 @@ static void __early_is_debug(int argc,char *argv[])
 {
 	int i, ret;
 	for(i = 0; i < argc; i++) {
-		ret = strcmp(argv[i], "-l");
-		if(ret == 0)  {
-			debug = 1;
-			return;
-		}
-
 		ret = strcmp(argv[i], "--debug");
 		if(ret == 0) {
 			debug = 1;
@@ -128,6 +125,9 @@ void proc_cmdarg(int argc, char *argv[])
 	int short_arg;
 	__early_init(argc, argv);
 
+#ifdef CLIENT
+	struct hostent * host;
+#endif
 	while((short_arg = getopt_long(argc, argv, SHORT_STR, long_arg, NULL)) 
 		!= -1) {
 		switch(short_arg) {
@@ -138,13 +138,13 @@ void proc_cmdarg(int argc, char *argv[])
 			if(!debug)
 				daemon_mode = 1;
 			break;
+		case 'p':
+			argument.port = 
+				__strtol(optarg, NULL, 10);	
+			break;
 #ifdef SERVER
 		case 'b':
 			argument.brditv = 
-				__strtol(optarg, NULL, 10);	
-			break;
-		case 'p':
-			argument.port = 
 				__strtol(optarg, NULL, 10);	
 			break;
 #endif
@@ -152,6 +152,16 @@ void proc_cmdarg(int argc, char *argv[])
 		case 'r':
 			argument.reportitv = 
 				__strtol(optarg, NULL, 10);	
+			break;
+		case 'a':
+			host = gethostbyname(optarg);
+			if(!host) {
+				sys_warn("Can not get ac address by: %s\n",
+					optarg);
+				break;
+			}
+			argument.acaddr.sin_addr = 
+				*((struct in_addr *)host->h_addr);
 			break;
 #endif
 		case 'l':
@@ -165,7 +175,7 @@ void proc_cmdarg(int argc, char *argv[])
 			break;
 		case 'h':
 			help();
-			break;
+			exit(0);
 		case '*':
 			break;
 		default:

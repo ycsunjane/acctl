@@ -101,7 +101,7 @@ void net_init()
 	int sock;
 	/* init epoll */
 	net_epoll_init();
-
+	
 	dll_init(&argument.nic[0], &sock, NULL, NULL);
 	insert_sockarr(sock, net_dllrecv, NULL);
 

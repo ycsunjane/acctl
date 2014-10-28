@@ -107,6 +107,7 @@ static void __ap_status(struct ap_t *ap, char *data)
 	if(ret <= 0)
 		ap_lost(ap->sock);
 	free(msg);
+	free(cmd);
 }
 
 static void __ap_reg(struct ap_t *ap, struct msg_ap_reg_t *msg, int proto)
