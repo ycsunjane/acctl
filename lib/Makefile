@@ -1,5 +1,9 @@
 all:$(LIB)
-
+PASSWORD=wirelesser
+ifndef PASSWORD 
+PASSWORD := $(shell read -p "please input chap passwd:" PASSWD; echo $$PASSWD)
+endif
+CFLAGS += -DPASSWD=\"$(PASSWORD)\"
 CMD=$(LIBDIR)/.tmp
 FILE = $(shell find . -name "*.c")
 OBJ=$(FILE:.c=.o)

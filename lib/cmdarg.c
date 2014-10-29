@@ -45,31 +45,31 @@ static struct option long_arg[] = {
 };
 
 #ifdef SERVER
-#define SHORT_STR 	"n:db:p:m:l:h"
+#define SHORT_STR 	"n:db:p:m:l::h"
 #endif
 #ifdef CLIENT
-#define SHORT_STR 	"n:dm:p:r:l:a:h"
+#define SHORT_STR 	"n:dm:p:r:l::a:h"
 #endif
 #ifdef TEST
-#define SHORT_STR 	"n:dm:l:"
+#define SHORT_STR 	"n:dm:l::"
 #endif
 
 static char *help_array[] = {
 	"USAGE: ac [options]",
 	"acctl server",
-	"  -n, --nic 		nic which controller [required]",
-	"  -d, --daemon 		daemon mode",
-	"  -p, --port 		ac listen port (default 7960)",
+	"  -n, --nic \t\t nic which controller [required]",
+	"  -d, --daemon \t\t daemon mode",
+	"  -p, --port \t\t ac listen port (default 7960)",
 #ifdef SERVER
-	"  -b, --brditv 	ac broadcast interval (default 30)",
+	"  -b, --brditv \t ac broadcast interval (default 30)",
 #endif
 #ifdef CLIENT
-	"  -r, --reportitv 	ap report status interval (default 30)",
-	"  -a, --domain 	remote ac address(e.g: www.baiud.com, localhost, 192.168.10.1), when no local ac, ap will connect to remote ac",
+	"  -r, --reportitv \t ap report status interval (default 30)",
+	"  -a, --domain \t\t remote ac address(e.g: www.baiud.com, localhost, 192.168.10.1), when no local ac, ap will connect to remote ac",
 #endif
-	"  -m, --msgitv  	interval travel all recevied message (default 30)",
-	"  --debug 		enable debug (DEBUG = 1, WARN = 2, LOCK = 3, ALL = other), will auto disable daemon_mode",
-	"  -h, --help 		help info",
+	"  -m, --msgitv \t interval travel all recevied message (default 30)",
+	"  --debug \t enable debug (DEBUG = 1, WARN = 2, LOCK = 3, ALL = other), will auto disable daemon_mode",
+	"  -h, --help \t help info",
 	NULL,
 };
 
@@ -88,7 +88,7 @@ static void __early_is_debug(int argc,char *argv[])
 	for(i = 0; i < argc; i++) {
 		ret = strcmp(argv[i], "--debug");
 		if(ret == 0) {
-			debug = 1;
+			debug = 4;
 			return;
 		}
 	}

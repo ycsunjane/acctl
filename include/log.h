@@ -43,7 +43,7 @@ extern int debug;
 		syslog(LEVEL, "(%u)%s +%d %s(): "fmt,  								\
 			(unsigned int)pthread_self(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); 	\
 		switch(debug) { 										\
-		case ARG_DEBUG: 											\
+		case ARG_DEBUG: 										\
 			__debug = (LEVEL == SYSLOG_DEBUG) ? 1: 0; 						\
 			break; 											\
 		case ARG_WARN: 											\
@@ -56,8 +56,8 @@ extern int debug;
 			__debug = 1; 										\
 		} 												\
 		if(__debug) 											\
-			fprintf(stderr, "(%u)%s +%d %s(): "fmt, 							\
-				(unsigned int)pthread_self(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); 	\
+			fprintf(stderr, "(%u)%s +%d %s(): "fmt, 						\
+				(unsigned int)pthread_self(), __FILE__, __LINE__, __FUNCTION__, ##__VA_ARGS__); \
 	} while(0)
 
 #define sys_err(fmt, ...) 	__sys_log(SYSLOG_ERR, "ERR: "fmt, ##__VA_ARGS__)
@@ -75,27 +75,19 @@ extern int debug;
 #endif
 
 #ifdef DEBUG
-#define pr_ap(mac, uuid) 						\
-do { 									\
-	sys_debug("%02x:%02x:%02x:%02x:%02x:%02x reg in: %s\n", 	\
-		(unsigned char) (mac)[0], 				\
-		(unsigned char) (mac)[1], 				\
-		(unsigned char) (mac)[2], 				\
-		(unsigned char) (mac)[3], 				\
-		(unsigned char) (mac)[4], 				\
-		(unsigned char) (mac)[5], 				\
-		uuid); 							\
+#define pr_ap(mac, uuid) 								\
+do { 											\
+	unsigned char *_mac = (void *)(mac); 						\
+	sys_debug("%02x:%02x:%02x:%02x:%02x:%02x reg in: %s\n", 			\
+		(_mac)[0], (_mac)[1], (_mac)[2], (_mac)[3], (_mac)[4], (_mac)[5], 	\
+		uuid); 									\
 } while(0)
 
-#define pr_mac(mac) 							\
-do { 									\
-	sys_debug("%02x:%02x:%02x:%02x:%02x:%02x\n", 			\
-		(unsigned char) (mac)[0], 				\
-		(unsigned char) (mac)[1], 				\
-		(unsigned char) (mac)[2], 				\
-		(unsigned char) (mac)[3], 				\
-		(unsigned char) (mac)[4], 				\
-		(unsigned char) (mac)[5]); 				\
+#define pr_mac(mac) 									\
+do { 											\
+	unsigned char *_mac = (void *)(mac); 						\
+	sys_debug("%02x:%02x:%02x:%02x:%02x:%02x\n", 					\
+		(_mac)[0], (_mac)[1], (_mac)[2], (_mac)[3], (_mac)[4], 	(_mac)[5]); 	\
 } while(0)
 
 #define pr_ipv4(addr) 							\
@@ -105,24 +97,43 @@ do { 									\
 	sys_debug("address:%s, port:%d\n", _buf, ntohs((addr)->sin_port)); \
 } while(0)
 
-#define pr_hash(key, aphash, mac) 						\
-do { 										\
-	sys_debug("key: %d, aphash: %p, mac: %02x:%02x:%02x:%02x:%02x:%02x\n", 	\
-		key, aphash, 						\
-		(unsigned char) (mac)[0], 				\
-		(unsigned char) (mac)[1], 				\
-		(unsigned char) (mac)[2], 				\
-		(unsigned char) (mac)[3], 				\
-		(unsigned char) (mac)[4], 				\
-		(unsigned char) (mac)[5]); 				\
+#define pr_hash(key, aphash, mac) 							\
+do { 											\
+	unsigned char *_mac = (void *)(mac); 						\
+	sys_debug("key: %d, aphash: %p, mac: %02x:%02x:%02x:%02x:%02x:%02x\n", 		\
+		key, aphash, 								\
+		(_mac)[0], (_mac)[1], (_mac)[2], (_mac)[3], (_mac)[4], (_mac)[5]); 	\
 } while(0)
+
+#define pr_md5(md5) 											\
+do { 													\
+	unsigned char *_md5 = (void *)(md5); 								\
+	sys_debug("md5: %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n", 		\
+		(_md5)[0],  (_md5)[1],  (_md5)[2],  (_md5)[3],  					\
+		(_md5)[4],  (_md5)[5],  (_md5)[6],  (_md5)[7],  					\
+		(_md5)[8],  (_md5)[9],  (_md5)[10], (_md5)[11],  					\
+		(_md5)[12], (_md5)[13], (_md5)[14], (_md5)[15]);  					\
+}while(0)
+
+#define pr_pkt(pkt, len) 				\
+do { 							\
+	int _i; 					\
+	unsigned char *_pkt = (void *)pkt; 		\
+	for(_i = 0; _i < len; _i++) { 			\
+		pure_info("%02x ", _pkt[_i]); 		\
+		if(!((_i + 1) % 8)) pure_info("\t"); 	\
+		if(!((_i + 1) % 16)) pure_info("\n"); 	\
+	} 						\
+	pure_info("\n"); 				\
+}while(0)
 
 #else
 #define pr_ap(mac, uuid) 	NULL
 #define pr_mac(mac) 		NULL
 #define pr_ipv4(addr) 		NULL
 #define pr_hash(key, aphash, mac)  NULL
+#define pr_md5(md5) 		NULL
+#define pr_pkt(pkt, len) 		NULL
 #endif
-
 
 #endif /* __LOG_H__ */

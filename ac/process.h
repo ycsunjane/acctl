@@ -18,10 +18,15 @@
 #ifndef __PROCESS_H__
 #define __PROCESS_H__
 #include <netlayer.h>
+struct ac_t {
+	uint32_t random;
+	char 	acuuid[UUID_LEN];
+};
 
-extern char 	acuuid[UUID_LEN];
-void acuuid_set();
+extern struct ac_t ac;
+
+void ac_init();
 void ap_lost(int sock);
 void msg_proc(struct ap_hash_t *aphash, 
-	struct msg_head_t *msg, int proto);
+	struct msg_head_t *msg, int len, int proto);
 #endif /* __PROCESS_H__ */

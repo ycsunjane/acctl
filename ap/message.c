@@ -50,7 +50,6 @@ void message_insert(struct message_t *msg)
 
 struct message_t * message_delete()
 {
-	sys_debug("message delete\n");
 	MUTEX_LOCK(message_lock);
 	if(message_num == 0) {
 		assert(*tail == head);
@@ -66,6 +65,7 @@ struct message_t * message_delete()
 		tail = &head;
 
 	MUTEX_UNLOCK(message_lock);
+	sys_debug("message delete: %p\n", tmp);
 	return tmp;
 }
 
@@ -81,7 +81,7 @@ void *message_travel(void *arg)
 		sleep(argument.msgitv);
 		if(head == NULL) continue;
 		while((msg = message_delete())) {
-			msg_proc((void *)msg->data, msg->proto);
+			msg_proc((void *)msg->data, msg->len, msg->proto);
 			message_free(msg);
 		}
 		sys_debug("Message travel pthreads (next %d second later)\n", 

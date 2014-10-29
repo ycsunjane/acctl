@@ -52,6 +52,7 @@ static void *net_dllrecv(void *arg)
 		free(msg);
 		goto err;
 	}
+	msg->len = rcvlen;
 	msg->proto = MSG_PROTO_ETH;
 	message_insert(msg);
 err:
@@ -90,6 +91,7 @@ void *__net_netrcv(void *arg)
 		free(msg);
 		goto err;
 	}
+	msg->len = rcvlen;
 	msg->proto = MSG_PROTO_TCP;
 	message_insert(msg);
 err:

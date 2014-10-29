@@ -49,6 +49,7 @@ struct message_t {
 	/* dllayer or tcp */
 	int 			proto;
 	struct message_t  	*next;
+	int 			len;
 	char 			data[0];
 };
 
@@ -67,6 +68,9 @@ struct ap_t {
 	/* tcp sock */
 	int 			sock;
 	struct ap_status_t 	ap_status;
+
+	/* last random */
+	uint32_t 		random;
 };
 
 struct ap_hash_t {

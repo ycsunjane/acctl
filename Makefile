@@ -41,11 +41,13 @@ TARGET=
 export CC LD AR INSTALL TARGET
 
 INC = -I$(TOPDIR)/include
-CFLAGS = -Wall -Wno-unused-function -g -O0 $(INC) -DDEBUG
+CFLAGS = -Wall -Wno-unused-function -O0 $(INC)
+CFLAGS += -g -DDEBUG 
 LDFLAGS = -lpthread
 export CFLAGS LDFLAGS
 
 all:acser apcli test
+
 
 LIB = libapctl.o
 LIBDIR = $(TOPDIR)/lib

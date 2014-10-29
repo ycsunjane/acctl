@@ -29,6 +29,7 @@ struct message_t {
 	/* dllayer or tcp */
 	int 			proto;
 	struct message_t  	*next;
+	int 			len;
 	char 			data[0];
 };
 

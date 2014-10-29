@@ -49,8 +49,8 @@ int main(int argc, char *argv[])
 	proc_arg(argc, argv);
 	/* resource init */
 	resource_init();
-	/* set ac uuid */
-	acuuid_set();
+	/* set ac uuid, random, md5sum */
+	ac_init();
 	/* init ap hash table */
 	hash_init();
 	/* start message travel thread */

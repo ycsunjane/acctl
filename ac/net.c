@@ -34,6 +34,7 @@
 #include "thread.h"
 #include "process.h"
 #include "link.h"
+#include "chap.h"
 
 static void *__net_dllrecv(void *arg)
 {
@@ -51,6 +52,7 @@ static void *__net_dllrecv(void *arg)
 		free(msg);
 		goto err;
 	}
+	msg->len = rcvlen;
 
 	sys_debug("datalink layer recive a packet\n");
 	char *mac;
@@ -110,6 +112,7 @@ static void *__net_netrcv(void *arg)
 		free(msg);
 		goto err;
 	}
+	msg->len = rcvlen;
 
 	char *mac;
 	struct msg_head_t *head;
@@ -141,13 +144,16 @@ static void *net_dllbrd(void *arg)
 		return NULL;
 	}
 
-	strncpy(reqbuf->header.acuuid, acuuid, UUID_LEN-1);
-	reqbuf->header.msg_type = MSG_AC_BRD;
-	memcpy(&reqbuf->header.mac[0], &argument.mac[0], ETH_ALEN);
-
 	while(1) {
-		sys_debug("Send a broadcast probe msg (next %d second later)\n", 
-			argument.brditv);
+		ac.random = chap_get_random();
+		sys_debug("Send a broadcast probe msg, random: %u (next %d second later)\n", 
+			ac.random, argument.brditv);
+
+		/* generate random0 */
+		fill_msg_header(&reqbuf->header, MSG_AC_BRD, 
+			&ac.acuuid[0], ac.random);
+
+		/* first broad cast packet, there is no need calculate chap */
 		dll_brdcast((char *)reqbuf, sizeof(struct msg_ac_brd_t));
 		sleep(argument.brditv);
 	}

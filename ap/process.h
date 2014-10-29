@@ -17,6 +17,7 @@
  */
 #ifndef __PROCESS_H__
 #define __PROCESS_H__
+#include <stdint.h>
 #include <pthread.h>
 #include "msg.h"
 struct sysstat_t {
@@ -34,5 +35,5 @@ struct sysstat_t {
 void ac_lost();
 void init_report();
 extern struct sysstat_t sysstat;
-void msg_proc(struct msg_head_t *msg, int proto);
+void msg_proc(struct msg_head_t *msg, int len, int proto);
 #endif /* __PROCESS_H__ */

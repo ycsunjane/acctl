@@ -194,6 +194,7 @@ static void *message_travel(void *arg)
 				while((msg = message_delete(aphash))) {
 					msg_proc(aphash, 
 						(void *)&msg->data[0], 
+						msg->len,
 						msg->proto);
 					message_free(msg);
 				}

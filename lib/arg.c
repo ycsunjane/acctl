@@ -74,16 +74,17 @@ static void __check_arg()
 	}
 	__getmac(&argument.nic[0], &argument.mac[0]);
 	__getaddr(&argument.nic[0], &argument.addr);
-	argument.msgitv = (argument.msgitv == 0) ? 30 : argument.msgitv;
 	argument.port = (argument.port == 0) ? ACPORT : argument.port;
 #ifdef SERVER
 	/* default ac broadcast interval */
 	argument.brditv = (argument.brditv == 0) ? 30 : argument.brditv;
+	argument.msgitv = (argument.msgitv == 0) ? argument.brditv / 10 : argument.msgitv;
 	argument.addr.sin_port = htons(argument.port);
 	pr_ipv4(&argument.addr);
 #endif
 #ifdef CLIENT
 	argument.reportitv = (argument.reportitv == 0) ? 30 : argument.reportitv;
+	argument.msgitv = (argument.msgitv == 0) ? argument.reportitv / 10 : argument.msgitv;
 	argument.acaddr.sin_port = htons(argument.port);
 	pr_ipv4(&argument.acaddr);
 #endif

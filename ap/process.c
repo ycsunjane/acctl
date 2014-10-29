@@ -45,15 +45,6 @@ struct sysstat_t sysstat = {
 	.lock = PTHREAD_MUTEX_INITIALIZER,
 };
 
-static void __fill_msg_header(struct msg_head_t *msg, int msgtype)
-{
-	memcpy(&msg->acuuid[0], 
-		&sysstat.acuuid[0], UUID_LEN);
-	memcpy(&msg->mac[0], 
-		&argument.mac[0], ETH_ALEN);
-	msg->msg_type = msgtype; 
-}
-
 static void ac_reconnect()
 {
 	if(!sysstat.server.sin_addr.s_addr)
@@ -90,7 +81,7 @@ static void *report_apstatus(void *arg)
 
 	int bufsize = sizeof(struct msg_ap_status_t) +
 		sizeof(struct apstatus_t);
-	char *buf = malloc(bufsize);
+	char *buf = calloc(1, bufsize);
 	if(buf == 0) {
 		sys_err("Malloc for report apstatus failed:%s ", 
 			strerror(errno));
@@ -98,11 +89,11 @@ static void *report_apstatus(void *arg)
 	}
 
 	int proto;
-	struct msg_ap_status_t *msg = (void *)buf;
-	__fill_msg_header(&msg->header, MSG_AP_STATUS);
+	/* tcp do not use chap to protect */
+	fill_msg_header((void *)buf, MSG_AP_STATUS, NULL, 0);
 
-	/* ap will first connect remote ac, but if find local ac, ap will
-	 * connect to local ac */
+	/* ap will first connect remote ac, but if 
+	 * find local ac, ap will connect to local ac */
 	while(1) {
 		proto = (sysstat.sock >= 0) ? MSG_PROTO_TCP : MSG_PROTO_ETH;
 		if(proto == MSG_PROTO_ETH) {
@@ -114,7 +105,8 @@ static void *report_apstatus(void *arg)
 		memcpy(buf + sizeof(struct msg_ap_status_t),
 			ap, sizeof(struct apstatus_t));
 
-		ret = net_send(proto, sysstat.sock, sysstat.dmac, buf, bufsize);
+		ret = net_send(proto, sysstat.sock, 
+			sysstat.dmac, buf, bufsize);
 		if(ret <= 0 && proto == MSG_PROTO_TCP) {
 			ac_lost();
 			ac_reconnect();
@@ -132,24 +124,62 @@ static int __uuid_equ(char *src, char *dest)
 	return !strncmp(src, dest, UUID_LEN - 1);
 }
 
-static void _proc_brd(struct msg_ac_brd_t *msg, int proto)
+/* XXX: only use in !reg stat,
+ * there is impossible have 10 ac in local */
+#define LOCAL_AC_MAX 	(10)
+struct mac_random_map_t {
+	uint32_t random;
+	char mac[ETH_ALEN];
+};
+static struct mac_random_map_t random_map[LOCAL_AC_MAX] = {{0}};
+
+static int offset = 0;
+static uint32_t new_random(char *mac)
+{
+	uint32_t random;
+	random_map[offset].random = chap_get_random();
+	memcpy(random_map[offset].mac, mac, ETH_ALEN);
+	random = random_map[offset].random;
+	offset = (offset + 1) % LOCAL_AC_MAX;
+	return random;
+}
+
+static uint32_t get_random(char *mac)
+{
+	int i, j;
+	/* offset should be check first */
+	for(i = offset - 1, j = 0; j < LOCAL_AC_MAX; i++, j++) {
+		if(!memcmp(mac, random_map[i % LOCAL_AC_MAX].mac, ETH_ALEN))
+			return random_map[i % LOCAL_AC_MAX].random;
+	}
+	return 0;
+}
+
+static void _proc_brd(struct msg_ac_brd_t *msg, int len, int proto)
 {
 	/* send current ipv4 */
-	struct msg_ap_reg_t *data = 
+	struct msg_ap_reg_t *resp = 
 		malloc(sizeof(struct msg_ap_reg_t));
-	if(data == NULL) {
+	if(resp == NULL) {
 		sys_warn("Malloc for response failed:%s\n", 
 			strerror(errno));
 		return;
 	}
-	__fill_msg_header((void *)data, MSG_AP_REG);
-	data->ipv4 = argument.addr;
+
+	/* generate random1 */
+	fill_msg_header((void *)resp, MSG_AP_REG, 
+		msg->header.acuuid, new_random(msg->header.mac));
+	resp->ipv4 = argument.addr;
+
+	/* calculate chap: md5sum1 = packet + random0 + password */
+	chap_fill_msg_md5((void *)resp, sizeof(*resp), msg->header.random);
 	net_send(proto, -1, &msg->header.mac[0], 
-		(void *)data, sizeof(struct msg_ap_reg_t));
-	free(data);
+		(void *)resp, sizeof(struct msg_ap_reg_t));
+	free(resp);
 }
 
-static void _proc_brd_isreg(struct msg_ac_brd_t *msg, int proto)
+static void 
+_proc_brd_isreg(struct msg_ac_brd_t *msg, int len, int proto)
 {
 	if(!__uuid_equ(&msg->header.acuuid[0], &sysstat.acuuid[0])) {
 		if(__uuid_equ(&msg->takeover[0], &sysstat.acuuid[0])) {
@@ -157,19 +187,26 @@ static void _proc_brd_isreg(struct msg_ac_brd_t *msg, int proto)
 				close(sysstat.sock);
 				sysstat.sock = -1;
 			}
-			_proc_brd(msg, proto);
+			_proc_brd(msg, len, proto);
 		} else {
-			struct msg_ap_resp_t *data = 
+			/* tell the broadcast ac, ap have reg in other ac */
+			struct msg_ap_resp_t *resp = 
 				malloc(sizeof(struct msg_ap_resp_t));
-			if(data == NULL) {
+			if(resp == NULL) {
 				sys_warn("Malloc for response failed:%s\n", 
 					strerror(errno));
 				return;
 			}
-			__fill_msg_header(data, MSG_AP_RESP);
-			net_send(proto, -1, &sysstat.dmac[0], 
-				(void *)data, sizeof(struct msg_ap_resp_t));
-			free(data);
+			fill_msg_header(resp, MSG_AP_RESP, 
+				msg->header.acuuid, 
+				new_random(msg->header.mac));
+
+			/* calculate chap */
+			chap_fill_msg_md5(resp, sizeof(*resp), 
+				msg->header.random);
+			net_send(proto, -1, &msg->header.mac[0], 
+				(void *)resp, sizeof(struct msg_ap_resp_t));
+			free(resp);
 		}
 	}
 }
@@ -177,15 +214,20 @@ static void _proc_brd_isreg(struct msg_ac_brd_t *msg, int proto)
 /*
  * reponse_brd recv broadcast msg from ac and update sysstat
  * */
-static void proc_brd(struct msg_ac_brd_t *msg, int proto)
+static void proc_brd(struct msg_ac_brd_t *msg, int len, int proto)
 {
 	assert(proto == MSG_PROTO_ETH);
 
 	sys_debug("receive ac broadcast packet\n");
+	if(len < sizeof(*msg)) {
+		sys_err("receive error msg ac broadcast packet\n");
+		return;
+	}
+
 	if(sysstat.isreg)
-		_proc_brd_isreg(msg, proto);
+		_proc_brd_isreg(msg, len, proto);
 	else
-		_proc_brd(msg, proto);
+		_proc_brd(msg, len, proto);
 }
 
 static int setaddr(struct sockaddr *addr)
@@ -213,9 +255,22 @@ static int setaddr(struct sockaddr *addr)
 	return 1;
 }
 
-static void proc_reg_resp(struct msg_ac_reg_resp_t *msg, int proto)
+static void 
+proc_reg_resp(struct msg_ac_reg_resp_t *msg, int len, int proto)
 {
-	sys_debug("Recive ac reg response packet\n");
+	sys_debug("Receive ac reg response packet\n");
+	if(len < sizeof(*msg)) {
+		sys_err("Receive error msg ac reg response packet\n");
+		return;
+	}
+
+	/* md5sum3 = packet + random1 + password */
+	if(chap_msg_cmp_md5((void *)msg, sizeof(*msg), 
+			get_random(msg->header.mac))) {
+		sys_err("ac reg response packet chap error\n");
+		return;
+	}
+
 	strncpy(sysstat.acuuid, msg->header.acuuid, UUID_LEN);
 	memcpy(sysstat.dmac, msg->header.mac, ETH_ALEN);
 	if(msg->acaddr.sin_addr.s_addr)
@@ -243,28 +298,20 @@ static void __exec_cmd(struct msg_ac_cmd_t *cmd)
 
 static int is_mine(struct msg_head_t *msg)
 {
-	if(!sysstat.isreg) {
-		return 1;
-	} else if(strncmp(msg->acuuid, sysstat.acuuid, UUID_LEN)) {
-		sys_warn("receive invalid packet\n");
-		return 0;
-	} else {
-		return 1;
-	}
-	return 0;
+	return 1;
 }
 
-void msg_proc(struct msg_head_t *msg, int proto)
+void msg_proc(struct msg_head_t *msg, int len, int proto)
 {
 	if(!is_mine(msg))
 		return;
 
 	switch(msg->msg_type) {
 	case MSG_AC_BRD:
-		proc_brd((void *)msg, proto);
+		proc_brd((void *)msg, len, proto);
 		break;
 	case MSG_AC_REG_RESP:
-		proc_reg_resp((void *)msg, proto);
+		proc_reg_resp((void *)msg, len, proto);
 		break;
 	case MSG_AC_CMD:
 		__exec_cmd((struct msg_ac_cmd_t *)msg);
