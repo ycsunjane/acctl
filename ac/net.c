@@ -189,15 +189,15 @@ void net_init()
 	insert_sockarr(sock, __net_dllrecv, NULL);
 
 	/* create pthread recv msg */
-	__create_pthread(net_recv, NULL);
+	create_pthread(net_recv, NULL);
 	sys_debug("Create pthread net_recv msg\n");
 
 	/* create pthread tcp listen */
-	__create_pthread(net_netlisten, NULL);
+	create_pthread(net_netlisten, NULL);
 	sys_debug("Create pthread tcp listen\n");
 
 	/* create pthread broadcast ac probe packet */
-	__create_pthread(net_dllbrd, NULL);
+	create_pthread(net_dllbrd, NULL);
 	sys_debug("Create pthread broadcast dllayer msg\n");
 }
 

@@ -93,5 +93,5 @@ void *message_travel(void *arg)
 void message_init()
 {
 	/* create thread to travel all message */
-	__create_pthread(message_travel, NULL);
+	create_pthread(message_travel, NULL);
 }

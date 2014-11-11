@@ -207,6 +207,6 @@ static void *message_travel(void *arg)
 void message_travel_init()
 {
 	/* create thread process all message */
-	__create_pthread(message_travel, NULL);
+	create_pthread(message_travel, NULL);
 }
 

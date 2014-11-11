@@ -22,22 +22,25 @@
 #include <errno.h>
 #include <pthread.h>
 #include <stdlib.h>
-#include "log.h"
 
-static void __create_pthread(void *(*start_routine) (void *), void *arg)
+#define THREAD 	pthread_mutex_t
+
+#define INIT_LOCK(name) \
+	THREAD name = PTHREAD_MUTEX_INITIALIZER
+
+#define LOCK(name) \
+	pthread_mutex_lock(name)
+
+#define TRYLOCK(name) \
+	pthread_mutex_lock(name)
+
+#define UNLOCK(name) \
+	pthread_mutex_unlock(name)
+
+static inline void LOCK_INIT(THREAD *name)
 {
-	int ret;
-	pthread_t pid;
-	ret = pthread_create(&pid, NULL, start_routine, arg);
-	if(ret != 0) {
-		sys_err("Create pthread failed: %s\n", strerror(errno));
-		exit(-1);
-	}
-
-	ret = pthread_detach(pid);
-	if(ret != 0) {
-		sys_err("Create pthread failed: %s\n", strerror(errno));
-		exit(-1);
-	}
+	pthread_mutex_init(name, NULL);
 }
+
+void create_pthread(void *(*start_routine) (void *), void *arg);
 #endif /* __THREAD_H__ */

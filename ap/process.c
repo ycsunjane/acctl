@@ -332,5 +332,5 @@ void init_report()
 {
 	/* init remote ac address */
 	sysstat.server = argument.acaddr;
-	__create_pthread(report_apstatus, NULL);
+	create_pthread(report_apstatus, NULL);
 }

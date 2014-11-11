@@ -108,7 +108,7 @@ void net_init()
 	insert_sockarr(sock, net_dllrecv, NULL);
 
 	/* create pthread recv msg */
-	__create_pthread(net_recv, head);
+	create_pthread(net_recv, head);
 	sys_debug("Create pthread recv dllayer msg\n");
 }
 

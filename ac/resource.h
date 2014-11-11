@@ -18,22 +18,28 @@
 #ifndef __RESOURCE_H__
 #define __RESOURCE_H__
 
+#include "thread.h"
+#include "list.h"
+
 struct _ip_t {
 	char   apmac[ETH_ALEN];
 	struct sockaddr_in ipv4;
-	struct _ip_t *next;
+	struct list_head list;
 };
 
 struct _ippool_t {
-	struct _ip_t *pool;
-	struct _ip_t *alloc;
+	THREAD lock;
+	struct list_head pool;
+	struct list_head alloc;
 	int 	total;
 	int 	left;
 };
 
 extern struct _ippool_t *ippool;
 
+void resource_init();
 struct _ip_t *res_ip_alloc(struct sockaddr_in *addr, char *mac);
 int res_ip_conflict(struct sockaddr_in *addr, char *mac);
-void resource_init();
+int res_ip_add(struct sockaddr_in *addr);
+void res_ip_clear();
 #endif /* __RESOURCE_H__ */
