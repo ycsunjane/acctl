@@ -19,6 +19,7 @@
 #define __LOG_H__
 #include <syslog.h>
 #include <pthread.h>
+#include <string.h>
 #include <arpa/inet.h>
 
 #include "arg.h"

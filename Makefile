@@ -42,8 +42,10 @@ export CC LD AR INSTALL TARGET
 
 INC = -I$(TOPDIR)/include
 CFLAGS = -Wall -Wno-unused-function -O0 $(INC)
-CFLAGS += -g -DDEBUG 
+CFLAGS += -g -DDEBUG
 LDFLAGS = -lpthread
+CFLAGS+=$(shell mysql_config --cflags)
+LDFLAGS+=$(shell mysql_config --libs)
 export CFLAGS LDFLAGS
 
 all:acser apcli test

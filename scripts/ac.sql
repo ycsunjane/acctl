@@ -29,9 +29,9 @@ USE `ac`;
 --
 
 CREATE TABLE IF NOT EXISTS `resource` (
-  `ip_start` varchar(15) COLLATE utf8_unicode_ci NOT NULL,
-  `ip_end`   varchar(15) COLLATE utf8_unicode_ci NOT NULL,
-  `ip_mask`  varchar(15) COLLATE utf8_unicode_ci NOT NULL
+  `ip_start` varchar(15) COLLATE utf8_unicode_ci,
+  `ip_end`   varchar(15) COLLATE utf8_unicode_ci,
+  `ip_mask`  varchar(15) COLLATE utf8_unicode_ci 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- --------------------------------------------------------

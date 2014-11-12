@@ -66,14 +66,14 @@ static inline void __list_add(struct list_head *new,
 }
 
 /**
- * list_add - add a new entry
+ * _list_add - add a new entry
  * @new: new entry to be added
  * @head: list head to add it after
  *
  * Insert a new entry after the specified head.
  * This is good for implementing stacks.
  */
-static inline void list_add(struct list_head *new, struct list_head *head)
+static inline void _list_add(struct list_head *new, struct list_head *head)
 {
 	__list_add(new, head, head->next);
 }
@@ -164,7 +164,7 @@ static inline void list_del_init(struct list_head *entry)
 static inline void list_move(struct list_head *list, struct list_head *head)
 {
 	__list_del_entry(list);
-	list_add(list, head);
+	_list_add(list, head);
 }
 
 /**
