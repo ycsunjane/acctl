@@ -20,6 +20,21 @@
 
 #include "thread.h"
 #include "list.h"
+#include "mjson.h"
+
+#define IPLEN 	(20)
+struct res_t {
+	char ip_start[IPLEN];
+	char ip_end[IPLEN];
+	char ip_mask[IPLEN];
+} resource;
+
+static const struct json_attr_t json_attrs[] = {
+	{"ip_start", t_string, .addr.string = resource.ip_start, .len = IPLEN},
+	{"ip_end", t_string, .addr.string = resource.ip_end, .len = IPLEN},
+	{"ip_mask", t_string, .addr.string = resource.ip_mask, .len = IPLEN},
+	{NULL},
+};
 
 struct _ip_t {
 	char   apmac[ETH_ALEN];

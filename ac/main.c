@@ -48,8 +48,6 @@ void ui()
 int main(int argc, char *argv[])
 {
 	sql_init(&sql);
-	sql_query_res(&sql);
-	exit(0);
 
 	proc_arg(argc, argv);
 	/* resource init */

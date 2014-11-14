@@ -33,6 +33,7 @@ static struct option long_arg[] = {
 	{"port", has_arg, 0, 'p'},
 #ifdef SERVER
 	{"brditv", has_arg, 0, 'b'},
+	{"reschkitv", has_arg, 0, 'c'},
 #endif
 #ifdef CLIENT
 	{"reportitv", has_arg, 0, 'r'},
@@ -45,7 +46,7 @@ static struct option long_arg[] = {
 };
 
 #ifdef SERVER
-#define SHORT_STR 	"n:db:p:m:l::h"
+#define SHORT_STR 	"n:db:p:m:l::hc:"
 #endif
 #ifdef CLIENT
 #define SHORT_STR 	"n:dm:p:r:l::a:h"
@@ -62,6 +63,7 @@ static char *help_array[] = {
 	"  -p, --port \t\t ac listen port (default 7960)",
 #ifdef SERVER
 	"  -b, --brditv \t ac broadcast interval (default 30)",
+	"  -c, --reschkitv \t resource check interval (default 300)",
 #endif
 #ifdef CLIENT
 	"  -r, --reportitv \t ap report status interval (default 30)",
@@ -145,6 +147,10 @@ void proc_cmdarg(int argc, char *argv[])
 #ifdef SERVER
 		case 'b':
 			argument.brditv = 
+				__strtol(optarg, NULL, 10);	
+			break;
+		case 'c':
+			argument.reschkitv = 
 				__strtol(optarg, NULL, 10);	
 			break;
 #endif

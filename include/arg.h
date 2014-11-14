@@ -27,6 +27,7 @@ struct arg_t {
 	int 	port;
 #ifdef SERVER
 	int  	brditv;
+	int 	reschkitv;
 #endif
 #ifdef CLIENT
 	int 	reportitv; 

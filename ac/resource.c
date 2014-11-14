@@ -24,8 +24,12 @@
 #include <netinet/in.h>
 #include <linux/if_ether.h>
 
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
 #include "log.h"
 #include "resource.h"
+#include "sql.h"
 
 struct _ippool_t *ippool = NULL;
 
@@ -151,7 +155,7 @@ err:
 
 void res_ip_clear()
 {
-	assert(ippool == NULL);
+	assert(ippool != NULL);
 
 	struct _ip_t *pos, *tmp;
 
@@ -178,14 +182,89 @@ static void res_ip_init()
 			strerror(errno), errno);
 		exit(-1);
 	}
-	
+
 	LOCK_INIT(&ippool->lock);
 	INIT_LIST_HEAD(&ippool->pool);
 	INIT_LIST_HEAD(&ippool->alloc);
 	return;
 }
 
+
+#define HTONL(s, d) (d = htonl(s))
+#define NTOHL(s, d) (d = ntohl(s))
+void res_ip_reload()
+{
+	if(!strcmp(resource.ip_start, SQL_NULL) ||
+		!strcmp(resource.ip_end, SQL_NULL) ||
+		!strcmp(resource.ip_mask, SQL_NULL)) {
+		sys_warn("Resource ip error\n");
+		return;
+	}
+
+	struct in_addr ipstart, ipend, ipmask;
+	if(!inet_aton(resource.ip_start, &ipstart) ||
+		!inet_aton(resource.ip_end, &ipend) ||
+		!inet_aton(resource.ip_mask, &ipmask)) {
+		sys_warn("Resource ip error\n");
+		return;
+	}
+	sys_debug("start: %s, end: %s, mask: %s\n", 
+		resource.ip_start, resource.ip_end, resource.ip_mask);
+
+	NTOHL(ipstart.s_addr, ipstart.s_addr);
+	NTOHL(ipend.s_addr, ipend.s_addr);
+	NTOHL(ipmask.s_addr, ipmask.s_addr);
+
+	int num = (ipend.s_addr & ~ipmask.s_addr) - 
+		(ipstart.s_addr & ~ipmask.s_addr) + 1;
+	if(num <= 0) {
+		sys_warn("Resource ip error\n");
+		return;
+	} 
+
+	int i;
+	struct sockaddr_in addr, tmp;
+	/* skip net addr */
+	if(!(ipstart.s_addr & (~ipmask.s_addr))) {
+		ipstart.s_addr++;
+		num--;
+	}
+
+	/* skip broadcast addr */
+	if((ipend.s_addr & (~ipmask.s_addr)) == (~ipmask.s_addr))
+		num--;
+
+	addr.sin_addr.s_addr =  ipstart.s_addr;
+
+	res_ip_clear();
+	for(i = 0; i < num; i++, addr.sin_addr.s_addr++) {
+		HTONL(addr.sin_addr.s_addr, tmp.sin_addr.s_addr);
+		sys_debug("add %s\n", inet_ntoa(tmp.sin_addr));
+		res_ip_add(&tmp);
+	}
+}
+
+static void *res_check(void *arg)
+{
+	static char buffer[1024];
+	int status;
+	while(1) {
+		sql_query_res(&sql, buffer, 1024);
+
+		status = json_read_object(buffer, json_attrs, NULL);
+		if (status != 0) {
+			sys_err("%s\n", json_error_string(status));
+			exit(-1);
+		}
+		res_ip_reload();
+
+		sleep(argument.reschkitv);
+	}
+	return NULL;
+}
+
 void resource_init()
 {
 	res_ip_init();
+	create_pthread(res_check, NULL);
 }

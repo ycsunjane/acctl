@@ -19,6 +19,7 @@
 #include <stdint.h>
 #include <mysqld_error.h>
 #include "sql.h"
+#include "mjson.h"
 #include "log.h"
 
 MYSQL sql;
@@ -50,27 +51,26 @@ int sql_query(SQL *sql, char *cmd, MYSQL_RES **res, my_ulonglong *rows)
 	return 0;
 }
 
-void sql_query_res(SQL *sql)
+int sql_query_res(SQL *sql, char *buffer, int len)
 {
 	MYSQL_RES *res;
 	if(sql_query(sql, GETRES, &res, NULL) < 0)
-		return;
+		return -1;
 
 	int i;
 	MYSQL_ROW row;
-	unsigned long *lengths;
 	struct col_name_t *col = tables.res.head;
 
 	while((row = mysql_fetch_row(res))) {
-		lengths = mysql_fetch_lengths(res);
+		JSON_ENCODE_START(buffer, len);
 
-		for(i = 0; i < tables.res.col_num; i++) {
-			printf("len:%lu, %s:%s\n", 
-				lengths[i], 
-				col[i].name, 
-				row[i]);
-		}
+		for(i = 0; i < tables.res.col_num && len > 2; i++)
+			JSON_ENCODE(buffer, len, col[i].name, row[i]);
+
+		JSON_ENCODE_END(buffer, len);
 	}
+
+	return 0;
 }
 
 void sql_close(SQL *sql)

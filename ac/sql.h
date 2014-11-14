@@ -21,6 +21,9 @@
 #include <my_global.h>
 
 #define SQL 		MYSQL
+#define SQL_NULL 	"(null)"
+
+
 #define DBNAME 		"ac"
 #define RESOURCE 	"resource"
 
@@ -45,5 +48,5 @@ struct tbl_col_t {
 };
 
 int sql_init(SQL *sql);
-void sql_query_res(SQL *sql);
+int sql_query_res(SQL *sql, char *buffer, int len);
 #endif /* __SQL_H__ */

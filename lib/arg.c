@@ -76,6 +76,7 @@ static void __check_arg()
 	__getaddr(&argument.nic[0], &argument.addr);
 	argument.port = (argument.port == 0) ? ACPORT : argument.port;
 #ifdef SERVER
+	argument.reschkitv = (argument.reschkitv == 0) ? 300 : argument.reschkitv;
 	/* default ac broadcast interval */
 	argument.brditv = (argument.brditv == 0) ? 30 : argument.brditv;
 	argument.msgitv = (argument.msgitv == 0) ? argument.brditv / 10 : argument.msgitv;
