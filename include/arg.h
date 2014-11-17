@@ -33,10 +33,10 @@ struct arg_t {
 	int 	reportitv; 
 	struct  sockaddr_in acaddr;
 #endif
-	struct sockaddr_in addr;
 	int 	msgitv;
 	char 	nic[IFNAMSIZ];
 	char 	mac[ETH_ALEN];
+	struct  sockaddr_in addr;
 };
 
 enum {

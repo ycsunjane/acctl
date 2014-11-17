@@ -189,6 +189,18 @@ static void res_ip_init()
 	return;
 }
 
+static int res_ip_equ_bak()
+{
+	if(strcmp(resource.ip_start, resource.bak_start) ||
+		strcmp(resource.ip_end, resource.bak_end) ||
+		strcmp(resource.ip_mask, resource.bak_mask)) {
+		strcpy(resource.bak_start, resource.ip_start);
+		strcpy(resource.bak_end, resource.ip_end);
+		strcpy(resource.bak_mask, resource.ip_mask); 
+		return 0;
+	}
+	return 1;
+}
 
 #define HTONL(s, d) (d = htonl(s))
 #define NTOHL(s, d) (d = ntohl(s))
@@ -197,7 +209,7 @@ void res_ip_reload()
 	if(!strcmp(resource.ip_start, SQL_NULL) ||
 		!strcmp(resource.ip_end, SQL_NULL) ||
 		!strcmp(resource.ip_mask, SQL_NULL)) {
-		sys_warn("Resource ip error\n");
+		sys_err("Resource ip error\n");
 		return;
 	}
 
@@ -205,9 +217,11 @@ void res_ip_reload()
 	if(!inet_aton(resource.ip_start, &ipstart) ||
 		!inet_aton(resource.ip_end, &ipend) ||
 		!inet_aton(resource.ip_mask, &ipmask)) {
-		sys_warn("Resource ip error\n");
+		sys_err("Resource ip error\n");
 		return;
 	}
+	if(res_ip_equ_bak()) return;
+
 	sys_debug("start: %s, end: %s, mask: %s\n", 
 		resource.ip_start, resource.ip_end, resource.ip_mask);
 
@@ -249,6 +263,9 @@ static void *res_check(void *arg)
 	static char buffer[1024];
 	int status;
 	while(1) {
+		sys_debug("load resource from mysql(next: %d)\n",
+			argument.reschkitv);
+
 		sql_query_res(&sql, buffer, 1024);
 
 		status = json_read_object(buffer, json_attrs, NULL);

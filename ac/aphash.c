@@ -155,7 +155,6 @@ static struct message_t *message_delete(struct ap_hash_t *aphash)
 	if(aphash->next == NULL)
 		return NULL;
 
-	sys_debug("message delete aphash: %p\n", aphash);
 	struct message_t *msg;
 
 	pthread_mutex_lock(&aphash->lock);
@@ -166,6 +165,8 @@ static struct message_t *message_delete(struct ap_hash_t *aphash)
 	if(&msg->next == aphash->ptail)
 		aphash->ptail = &aphash->next;
 	pthread_mutex_unlock(&aphash->lock);
+
+	sys_debug("message delete aphash: %p, msg: %p\n", aphash, msg);
 
 	return msg;
 }

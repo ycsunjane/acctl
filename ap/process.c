@@ -230,11 +230,22 @@ static void proc_brd(struct msg_ac_brd_t *msg, int len, int proto)
 		_proc_brd(msg, len, proto);
 }
 
+static int addr_equ(struct sockaddr_in *addr)
+{
+	if(addr->sin_addr.s_addr == argument.addr.sin_addr.s_addr)
+		return 1;
+	return 0;
+}
+
 static int setaddr(struct sockaddr *addr)
 {
 	struct ifreq req;
 	strncpy(req.ifr_name, argument.nic, IFNAMSIZ);
 	req.ifr_addr = *addr;
+	req.ifr_addr.sa_family = AF_INET;
+
+	sys_debug("Set client nic ip: %s, addr: %s\n", req.ifr_name, 
+		inet_ntoa(((struct sockaddr_in *)&req.ifr_addr)->sin_addr));
 
 	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sockfd < 0) {
@@ -279,7 +290,6 @@ proc_reg_resp(struct msg_ac_reg_resp_t *msg, int len, int proto)
 		setaddr((void *)&msg->apaddr);
 
 	pr_ipv4(&msg->acaddr);
-	pr_ipv4(&msg->apaddr);
 
 	/* if have connect to remote ac, close it. 
 	 * and connect to local ac */

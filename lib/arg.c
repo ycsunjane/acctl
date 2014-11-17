@@ -46,6 +46,7 @@ static void __getmac(char *nic, char *mac)
 	ioctl(sockfd, SIOCGIFHWADDR, &req);
 	memcpy(mac, req.ifr_hwaddr.sa_data, ETH_ALEN);
 	close(sockfd);
+	pr_mac(mac);
 }
 
 static  void __getaddr(char *nic, struct sockaddr_in *addr)
@@ -62,6 +63,7 @@ static  void __getaddr(char *nic, struct sockaddr_in *addr)
 	ioctl(sockfd, SIOCGIFADDR, &req);
 	memcpy(addr, &req.ifr_addr, sizeof(struct sockaddr_in));
 	close(sockfd);
+	pr_ipv4(addr);
 }
 
 /* check argment */

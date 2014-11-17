@@ -129,9 +129,10 @@ static void __ap_reg(struct ap_t *ap,
 		addr = NULL;
 	else
 		addr = &(msg->ipv4);
-	pr_ipv4(addr);
 
+	pr_ipv4(addr);
 	ip = res_ip_alloc(addr, msg->header.mac);
+	pr_ipv4(&ip->ipv4);
 
 	struct msg_ac_reg_resp_t *resp = 
 		calloc(1, sizeof(struct msg_ac_reg_resp_t));
